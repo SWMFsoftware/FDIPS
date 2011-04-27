@@ -1,0 +1,36 @@
+This document outlines how to install the FDIPS code
+
+#################
+# Opening FDIPS #
+#################
+
+# Open FDIPS tar ball
+cd {where_you_want_to_have_the_fdips_code}
+tar -xzf {path_to_file}/FDIPS_v{version_number}.tgz
+
+#################
+# Install FDIPS #
+#################
+
+# Many machines used by UofM are already recognized by the 
+# share/Scripts/Config.pl script which is called by the top 
+# level Config.pl script.
+# For these platform/compiler combinations installation is very simple:
+
+Config.pl -install
+
+# On other platforms the Fortan compiler and MPI libraries should be explicitly
+# given. See the share/build and share/include directories for options.
+# Example:
+
+Config.pl -install -compiler=ifort -mpi=openmpi
+
+#################
+# Running tests #
+#################
+
+# You can try running the standard test suite by typing
+
+make test
+
+# Successful passing of the test is indicated by empty *.diff files.
