@@ -1,0 +1,31 @@
+#MAGNETOGRAM
+fitsfile.dat		NameFileIn
+T			UseCosTheta
+3500.0			BrMax
+
+#GRID
+20			nR
+20			nTheta
+20			nPhi
+
+! Switch off timing so that output does not change from run-to-run
+#TIMING
+F			UseTiming
+
+#PARALLEL
+2			nProcTheta
+2			nProcPhi
+
+#SOLVER
+T			UsePreconditioner
+1e-10			Tolerance
+
+#OUTPUT
+field			TypeOutput
+fdips_field.out		NameFileField
+ascii			TypeFileField
+
+#OUTPUT
+potential		TypeOutput
+fdips_potential.out	NameFilePotential
+real8			TypeFilePotential
