@@ -35,7 +35,8 @@ FDIPS1: bin run
 	cd ${SHAREDIR}; make LIB
 	cd src; make FDIPS1
 
-test:	
+test:
+	rm -rf run
 	-@make test_fdips1
 	-@make test_fdips
 	ls -l *.diff
@@ -80,9 +81,12 @@ test_fdips_check:
 	ls -l test_fdips.diff
 
 clean:
+	cd doc/Tex; make clean
 	cd share; make clean
 	cd src; make clean
 
 allclean:
+	rm -f doc/Tex/FDIPS.dvi
 	cd src; make distclean
-	rm -rf run bin *.diff *~
+	rm -rf run bin *.diff *~ *.html *.php
+
