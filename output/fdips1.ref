@@ -1,4 +1,4 @@
-ModReadParam::read_file: read and broadcast nLine=  27 lines of text
+ModReadParam::read_file: read and broadcast nLine=  36 lines of text
  nCarringtonRotation, nTheta0, nPhi0:  1200 180 360
  BiCGSTAB tol,iter:   1.0000000000000000E-10 10000
  initial rnrm:   5.8752964623117494
