@@ -1,3 +1,4 @@
+\begin{verbatim}
 This document outlines how to install the FDIPS code
 
 #################
@@ -25,6 +26,14 @@ Config.pl -install
 
 Config.pl -install -compiler=ifort -mpi=openmpi
 
+####################
+# Read the manuals #
+####################
+
+# The manual can be found in 
+
+doc/FDIPS.pdf
+
 #################
 # Running tests #
 #################
@@ -34,3 +43,18 @@ Config.pl -install -compiler=ifort -mpi=openmpi
 make test
 
 # Successful passing of the test is indicated by empty *.diff files.
+
+####################
+# Editing FDIPS.in #
+####################
+
+# The run directory is created by the test, but it can also be created with
+make run
+
+# The FDIPS input parameter file run/FDIPS.in can either be edited with
+# a standard text editor (like emacs) or with the parameter editor GUI:
+share/Scripts/ParamEditor.pl run/FDIPS.in
+
+# This GUI is based on the PARAM.XML file that can also be read directly.
+
+\end{verbatim}
