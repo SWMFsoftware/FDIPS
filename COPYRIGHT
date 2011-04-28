@@ -1,0 +1,33 @@
+COPYRIGHT
+
+The following copyright applies to each file in the 
+FDIPS (Finite Difference Implicit Potential field Solver)
+distribution, unless otherwise stated in the file:
+
+Copyright (c) 2011, University of Michigan
+Written by Gabor Toth, Bart van der Holst and Zhenguang Huang
+(Center for Space Environment Modeling). 
+
+This file is part of FDIPS.
+
+
+LICENSE
+
+FDIPS is free software; you can redistribute it and/or modify it under the
+terms of the GNU Lesser General Public License (as published by the Free
+Software Foundation) version 2.1 dated February 1999.
+
+FDIPS is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE.  See the terms and conditions of the GNU Lesser
+General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public License along
+with this library (file COPYING.LESSER); if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+
+
+CONTACT INFORMATION
+
+The FDIPS developers can be contacted at gtoth@umich.edu. 
+Please see http://csem.engin.umich.edu/FDIPS for updates.
