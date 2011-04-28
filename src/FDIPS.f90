@@ -1,3 +1,5 @@
+! parallel version of Finite Difference Iterative Potential field Solver
+
 module ModPotentialField
   
   use ModMpi
@@ -62,7 +64,7 @@ module ModPotentialField
 
   integer, parameter :: iComm = MPI_COMM_WORLD
   integer :: iProc, nProc, iProcTheta, iProcPhi
-  integer :: shiftTheta, shiftPhi
+  integer :: iTheta0, iPhi0
   integer :: nTheta, nPhi
   real,  allocatable :: tmpXPhi0_II(:,:),tmpXPhipi_II(:,:)
   integer :: nThetaLgr,nThetaSml,nPhiLgr,nPhiSml
@@ -102,6 +104,10 @@ contains
        if(.not.read_line() ) EXIT
        if(.not.read_command(NameCommand)) CYCLE
        select case(NameCommand)
+       case("#MAGNETOGRAM")
+          call read_var('NameFileIn' , NameFileIn)
+          call read_var('UseCosTheta', UseCosTheta)
+          call read_var('BrMax'      , BrMax)
        case("#DOMAIN")
           call read_var('rMin', rMin)
           call read_var('rMax', rMax)
@@ -112,10 +118,6 @@ contains
        case("#PARALLEL")
           call read_var('nProcTheta', nProcTheta)
           call read_var('nProcPhi'  , nProcPhi)
-       case("#MAGNETOGRAM")
-          call read_var('NameFileIn' , NameFileIn)
-          call read_var('UseCosTheta', UseCosTheta)
-          call read_var('BrMax'      , BrMax)
        case("#TIMING")
           call read_var('UseTiming', UseTiming)
        case("#TEST")
@@ -315,33 +317,33 @@ contains
     if (iProcTheta < nProcThetaLgr .and. iProcPhi < nProcPhiLgr) then
        nTheta = nThetaLgr
        nPhi   = nPhiLgr
-       shiftTheta = iProcTheta* nThetaLgr
-       shiftPhi   = iProcPhi  * nPhiLgr
+       iTheta0 = iProcTheta* nThetaLgr
+       iPhi0   = iProcPhi  * nPhiLgr
     end if
 
     !Only iProcTheta in the large region
     if (iProcTheta < nProcThetaLgr .and. iProcPhi >= nProcPhiLgr) then
        nTheta = nThetaLgr
        nPhi   = nPhiSml
-       shiftTheta = iProcTheta  * nThetaLgr
-       shiftPhi   = nProcPhiLgr * nPhiLgr + (iProcPhi - nProcPhiLgr)*nPhiSml
+       iTheta0 = iProcTheta  * nThetaLgr
+       iPhi0   = nProcPhiLgr * nPhiLgr + (iProcPhi - nProcPhiLgr)*nPhiSml
     end if
 
     !Only iProcPhi in the large region
     if (iProcTheta >= nProcThetaLgr .and. iProcPhi < nProcPhiLgr) then
        nTheta = nThetaSml
        nPhi   = nPhiLgr
-       shiftTheta = nProcThetaLgr * nThetaLgr + (iProcTheta - nProcThetaLgr)*nThetaSml
-       shiftPhi   = iProcPhi      * nPhiLgr
+       iTheta0 = nProcThetaLgr * nThetaLgr + (iProcTheta - nProcThetaLgr)*nThetaSml
+       iPhi0   = iProcPhi      * nPhiLgr
     end if
 
     !Both iProcTheta and iProcPhi in the small region
     if (iProcTheta >= nProcThetaLgr .and. iProcPhi >= nProcPhiLgr) then
        nTheta = nThetaSml
        nPhi   = nPhiSml
-       shiftTheta = nProcThetaLgr*nThetaLgr &
+       iTheta0 = nProcThetaLgr*nThetaLgr &
             + (iProcTheta - nProcThetaLgr)*nThetaSml
-       shiftPhi   = nProcPhiLgr  *nPhiLgr   &
+       iPhi0   = nProcPhiLgr  *nPhiLgr   &
             + (iProcPhi   - nProcPhiLgr)  *nPhiSml
     end if
 
@@ -355,13 +357,11 @@ contains
           Potential_C(nR,nTheta,nPhi), &
           Rhs_C(nR,nTheta,nPhi), &
           B0_DF(3,nR+1,nTheta+1,nPhi+1), &
-          DivB_C(nR,nTheta,nPhi), &
-          PlotVar_VC(6,nR,nTheta,nPhi))
-     
+          DivB_C(nR,nTheta,nPhi))
 
      ! Set BrLocal_II, this is used in set_boundary when UseBr is true
-     BrLocal_II(:,:) = Br_II(shiftTheta + 1: shiftTheta + nTheta, &
-                             shiftPhi   + 1: shiftPhi   + nPhi)
+     BrLocal_II(:,:) = Br_II(iTheta0 + 1: iTheta0 + nTheta, &
+                             iPhi0   + 1: iPhi0   + nPhi)
      
     ! nR is the number of mesh cells in radial direction
     ! cell centered radial coordinate
@@ -381,7 +381,7 @@ contains
 
        !Set Theta_I
        do iTheta = 0, nTheta+1
-          z = max(-1.0, min(1.0, 1 - (iTheta + shiftTheta - 0.5)*dZ))
+          z = max(-1.0, min(1.0, 1 - (iTheta + iTheta0 - 0.5)*dZ))
           Theta_I(iTheta) = acos(z)
        end do
         
@@ -393,7 +393,7 @@ contains
 
        !Set ThetaNode_I
        do iTheta = 1, nTheta + 1
-          z = max(-1.0, min(1.0, 1 - (iTheta + shiftTheta -1)*dZ))
+          z = max(-1.0, min(1.0, 1 - (iTheta + iTheta0 -1)*dZ))
           ThetaNode_I(iTheta) = acos(z)
        end do
     else
@@ -402,12 +402,12 @@ contains
        
        !Set Theta_I
        do iTheta = 0, nTheta+1
-          Theta_I(iTheta) = (iTheta  + shiftTheta - 0.5)*dTheta
+          Theta_I(iTheta) = (iTheta  + iTheta0 - 0.5)*dTheta
        end do
  
        !Set ThetaNode_I
        do iTheta = 1, nTheta+1
-          ThetaNode_I(iTheta) = (iTheta + shiftTheta - 1)*dTheta
+          ThetaNode_I(iTheta) = (iTheta + iTheta0 - 1)*dTheta
        end do
     end if
 
@@ -432,7 +432,7 @@ contains
     dPhi = cTwoPi/nPhiAll
     !Set Phi_I
     do iPhi = 0, nPhi+1
-       Phi_I(iPhi) = (iPhi + shiftPhi - 1)*dPhi
+       Phi_I(iPhi) = (iPhi + iPhi0 - 1)*dPhi
     end do
     
     PhiNode_I = Phi_I(1:nPhi+1) - 0.5*dPhi
@@ -681,13 +681,13 @@ contains
     ! Symmetric in Theta but shifted by nPhiAll/2, be careful about the shift!
     if (iProcTheta == 0) then
        do iPhi = 1, nPhi
-          jPhi = modulo(iPhi + shiftPhi -1 + nPhiAll/2, nPhiAll) + 1
+          jPhi = modulo(iPhi + iPhi0 -1 + nPhiAll/2, nPhiAll) + 1
           x_G(:,0,iPhi)        = tmpXPhi0_II(:,jPhi)
        end do
     end if
     if (iProcTheta == nProcTheta-1) then
        do iPhi = 1, nPhi
-          jPhi = modulo(iPhi + shiftPhi -1 + nPhiAll/2, nPhiAll) + 1
+          jPhi = modulo(iPhi + iPhi0 -1 + nPhiAll/2, nPhiAll) + 1
           x_G(:,nTheta+1,iPhi) = tmpXPhipi_II(:,jPhi)
        end do
     end if
@@ -787,22 +787,8 @@ end module ModPotentialField
 
 module ModB0Matvec
 
-  use ModPotentialField, ONLY:  iComm, iProc, nProc, iProcTheta, iProcPhi, &
-       nTheta, nPhi, &
-       tmpXPhi0_II,tmpXPhipi_II, &
-       nThetaLgr,nThetaSml,nPhiLgr,nPhiSml, &
-       nProcThetaLgr,nProcThetaSml,nProcPhiLgr,nProcPhiSml, &
-       nR, nTheta, nPhi, Radius_I, SinTheta_I, &
-       dRadiusNode_I, dTheta_I, dCosTheta_I, dThetaNode_I, dPhiNode_I, &
-       Br_II, set_boundary, &
-       UseCosTheta, RadiusNode_I, Theta_I, SinThetaNode_I, dCosThetaNode_I, &
-       iRTest, iThetaTest, iPhiTest, ThetaNode_I, Phi_I, PhiNode_I
-
-  use ModMPI
-  use ModUtilities, ONLY: flush_unit
-  use ModIoUnit, ONLY: STDOUT_
-
   implicit none
+
 contains
 
   !============================================================================
@@ -834,15 +820,17 @@ contains
 
   subroutine get_gradient(x_C, Grad_DG)
 
+    use ModPotentialField, ONLY: nR, nTheta, nPhi, Radius_I, SinTheta_I, &
+         dRadiusNode_I, dThetaNode_I, dPhiNode_I, &
+         set_boundary, &
+         UseCosTheta, SinThetaNode_I, dCosThetaNode_I
+
     real, intent(in):: x_C(nR,nTheta,nPhi)
     real, intent(out):: Grad_DG(3,nR+1,nTheta+1,nPhi+1)
 
     real, allocatable, save :: x_G(:,:,:)
 
     integer:: iR, iTheta, iPhi
-
-    ! real:: r, GradExact_D(3)
-
     !--------------------------------------------------------------------------
     if(.not.allocated(x_G))then
        allocate(x_G(0:nR+1,0:nTheta+1,0:nPhi+1))
@@ -899,24 +887,6 @@ contains
        end do
     end do
 
-    ! Calculate discretization error for the l=m=1 harmonics
-    !iR = iRTest; iPhi = iPhiTest; iTheta = iThetaTest
-    !
-    !r = Radius_I(iR)
-    !GradExact_D  = (/ &
-    !     (1+2*rMax**3/RadiusNode_I(iR)**3)/(1+2*rMax**3) &
-    !     *sin(Theta_I(iTheta))*cos(Phi_I(iPhi)), &
-    !     (r-rMax**3/r**2)/(1+2*rMax**3)/r &
-    !     *cos(ThetaNode_I(iTheta))*cos(Phi_I(iPhi)), &
-    !     -(r-rMax**3/r**2)/(1+2*rMax**3)/r*sin(PhiNode_I(iPhi)) /)
-    !
-    !write(*,*) 'magnetogram at test cell=', Br_II(iTheta,iPhi)
-    !do iDim = 1, 3
-    !   write(*,*) 'Grad, Exact, Error=', &
-    !        Grad_DG(iDim,iR,iTheta,iPhi), GradExact_D(iDim), &
-    !        Grad_DG(iDim,iR,iTheta,iPhi) - GradExact_D(iDim)
-    !end do
-
   end subroutine get_gradient
 
   !============================================================================
@@ -930,7 +900,6 @@ contains
     real, intent(in) :: b_DG(3,nR+1,nTheta+1,nPhi+1)
     real, intent(out):: DivB_C(nR,nTheta,nPhi)
 
-    ! real:: r, DivExact_D(3), Div_D(3)
     integer:: iR, iTheta, iPhi
     !--------------------------------------------------------------------------
     do iPhi = 1, nPhi
@@ -952,48 +921,13 @@ contains
        end do
     end do
 
-    ! Calculate discretization error for the l=m=1 harmonics
-    !iR = iRTest; iPhi = iPhiTest; iTheta = iThetaTest
-    !r = Radius_I(iR)
-    !
-    !Div_D(1) = ( RadiusNode_I(iR+1)**2*b_DG(1,iR+1,iTheta,iPhi)   &
-    !     - RadiusNode_I(iR)**2  *b_DG(1,iR  ,iTheta,iPhi) ) &
-    !     / (Radius_I(iR)**2 *dRadius_I(iR))
-    !
-    !Div_D(2) = ( SinThetaNode_I(iTheta+1)*b_DG(2,iR,iTheta+1,iPhi)   &
-    !     - SinThetaNode_I(iTheta)  *b_DG(2,iR,iTheta  ,iPhi) ) &
-    !     / (Radius_I(iR)*dCosTheta_I(iTheta))
-    !
-    !Div_D(3) = ( b_DG(3,iR,iTheta,iPhi+1) - b_DG(3,iR,iTheta,iPhi) ) &
-    !     / (Radius_I(iR)*SinTheta_I(iTheta)*dPhi_I(iPhi))
-    !
-    !DivExact_D = &
-    !     (/ 2*SinTheta_I(iTheta), &
-    !     (1-SinTheta_I(iTheta)**2)/SinTheta_I(iTheta), &
-    !     - 1/SinTheta_I(iTheta) /)
-    !
-    !DivExact_D = DivExact_D &
-    !     *(r-rMax**3/r**2)/(1+2*rMax**3)/r**2*cos(Phi_I(iPhi))
-    !
-    !do iDim = 1, 3
-    !   write(*,*) 'Div_D, Exact, Error=', Div_D(iDim), DivExact_D(iDim), &
-    !        Div_D(iDim) - DivExact_D(iDim)
-    !end do
-    !   
-    !write(*,*)'testlaplace=', DivB_C(iR,iTheta,iPhi)
-    !write(*,*)'location   =', maxloc(abs(DivB_C))
-    !write(*,*)'max laplace=', maxval(abs(DivB_C))
-    !write(*,*)'avg laplace=', sum(abs(DivB_C))/(nR*nThetaAll*nPhiAll)
-    !
-    !stop
-
   end subroutine get_divergence
 
 end module ModB0Matvec
 
 !==============================================================================
 
-program potential_field
+program fdips
 
   ! Solve 3D potential field with given Br at inner boundary,
   ! radial field at outer boundary.
@@ -1002,8 +936,6 @@ program potential_field
   use ModB0Matvec, ONLY: get_gradient, get_divergence, matvec
   use ModLinearSolver, ONLY: bicgstab, prehepta
   use ModPlotFile, ONLY: save_plot_file
-  use ModUtilities, ONLY: flush_unit
-  use ModIoUnit, ONLY: STDOUT_
   use ModMpi
 
   implicit none
@@ -1127,7 +1059,6 @@ program potential_field
   
   UseBr = .false.
 
-  call flush_unit(STDOUT_)
   call mpi_barrier(iComm, iError)
   
   call bicgstab(matvec, Rhs_C, Potential_C, .false., n, &
@@ -1138,8 +1069,6 @@ program potential_field
   if(UseTiming) TimeEnd = mpi_wtime()
   if(iProc == 0) &
        write(*,*)'nIter, Tolerance, iError=', nIter, Tolerance, iError
-
-  PlotVar_VC = 0.0
 
   ! report maximum divb
   call get_gradient(Potential_C, B0_DF)
@@ -1152,28 +1081,30 @@ program potential_field
   end if
   if(iProc ==0)then
      write(*,*) 'max(abs(divb)) = ', DivBMax
-     write(*,*) 'nPorcTheta, nProcPhi=', nProcTheta, nProcPhi
+     write(*,*) 'nProcTheta, nProcPhi=', nProcTheta, nProcPhi
   end if
   if(UseTiming) write(*,*) 'running time=', TimeEnd - TimeStart
 
-  PlotVar_VC(1,:,:,:) = Potential_C
-  PlotVar_VC(2,:,:,:) = &
-       0.5*(B0_DF(1,1:nR,1:nTheta,1:nPhi) + &
-       B0_DF(1,2:nR+1,1:nTheta,1:nPhi))
-  PlotVar_VC(3,:,:,:) = &
-       0.5*(B0_DF(2,1:nR,1:nTheta,1:nPhi) + &
-       B0_DF(2,1:nR,2:nTheta+1,1:nPhi))
-  PlotVar_VC(4,:,:,:) = &
-       0.5*(B0_DF(3,1:nR,1:nTheta,1:nPhi) + &
-       B0_DF(3,1:nR,1:nTheta,2:nPhi+1))
-  PlotVar_VC(5,:,:,:) = DivB_C
-  PlotVar_VC(6,:,:,:) = Rhs_C
-
+  ! Save divb, potential and RHS for testing purposes
   if(DoSavePotential)then
+     allocate(PlotVar_VC(6,nR,nTheta,nPhi))
+     PlotVar_VC = 0.0
+
+     PlotVar_VC(1,:,:,:) = Potential_C
+     PlotVar_VC(2,:,:,:) = &
+          0.5*(B0_DF(1,1:nR,1:nTheta,1:nPhi) + B0_DF(1,2:nR+1,1:nTheta,1:nPhi))
+     PlotVar_VC(3,:,:,:) = &
+          0.5*(B0_DF(2,1:nR,1:nTheta,1:nPhi) + B0_DF(2,1:nR,2:nTheta+1,1:nPhi))
+     PlotVar_VC(4,:,:,:) = &
+          0.5*(B0_DF(3,1:nR,1:nTheta,1:nPhi) + B0_DF(3,1:nR,1:nTheta,2:nPhi+1))
+     PlotVar_VC(5,:,:,:) = DivB_C
+     PlotVar_VC(6,:,:,:) = Rhs_C
+
      ! Note the fake processor index to be used by redistribute.pl
      write(NameFile,'(a,2i2.2,a,i3.3,a)') &
           trim(NameFilePotential)//'_np01', nProcTheta, nProcPhi,'_', &
           iProcTheta + iProcPhi*nProcTheta, '.out'
+
      ! Save divb, potential and RHS for testing purposes
      call save_plot_file(NameFile, TypeFileIn=TypeFilePotential, &
           StringHeaderIn='potential field', &
@@ -1182,21 +1113,26 @@ program potential_field
           Coord2In_I=Theta_I(1:nTheta), &
           Coord3In_I=Phi_I(1:nPhi), &
           VarIn_VIII=PlotVar_VC)
-  end if
 
-  deallocate(PlotVar_VC)
+     deallocate(PlotVar_VC)
+  end if
 
   call save_potential_field
 
-  call MPI_FINALIZE(iError)
+  call MPI_finalize(iError)
 
-end program potential_field
+end program fdips
 !==============================================================================
 subroutine CON_stop(String)
 
-  character(len=*), intent(in):: String
+  use ModMpi
 
-  write(*,*) 'ERROR:', String
+  implicit none
+  character(len=*), intent(in):: String
+  integer:: iError, nError
+  !--------------------------------------------------------------------------
+  write(*,*) 'FDIPS ERROR:', String
+  call MPI_abort(MPI_COMM_WORLD, nError, iError)
   stop
 
 end subroutine CON_stop

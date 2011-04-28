@@ -1,3 +1,5 @@
+! Serial version of the Finite Difference Iterative Potential field Solver
+
 module ModPotentialField
 
   implicit none
@@ -30,9 +32,10 @@ module ModPotentialField
   logical           :: DoSaveTecplot   = .false.
   character(len=100):: NameFileTecplot = 'potentialfield.dat'
 
+  ! testing parameters
   integer:: iRTest = 1, iPhiTest = 1, iThetaTest = 2
 
-  ! local variables
+  ! local variables --------------------
   logical :: UseBr = .true.
 
   real, dimension(:), allocatable :: &
@@ -62,12 +65,16 @@ contains
     character(len=10):: TypeOutput
     character(len=*), parameter:: NameSub = 'read_fdips_param'
     !-----------------------------------------------------------------------
-    call read_file('POTENTIAL.in')
+    call read_file('FDIPS.in')
     call read_init
     do
        if(.not.read_line() ) EXIT
        if(.not.read_command(NameCommand)) CYCLE
        select case(NameCommand)
+       case("#MAGNETOGRAM")
+          call read_var('NameFileIn' ,  NameFileIn)
+          call read_var('UseCosTheta', UseCosTheta)
+          call read_var('BrMax'      ,  BrMax)
        case("#DOMAIN")
           call read_var('rMin', rMin)
           call read_var('rMax', rMax)
@@ -75,10 +82,9 @@ contains
           call read_var('nR    ', nR)
           call read_var('nTheta', nTheta)
           call read_var('nPhi  ', nPhi)
-       case("#MAGNETOGRAM")
-          call read_var('NameFileIn' ,  NameFileIn)
-          call read_var('UseCosTheta', UseCosTheta)
-          call read_var('BrMax'      ,  BrMax)
+       case("#PARALLEL", "#TIMING")
+          write(*,*)'Serial version of FDIPS ignores command ',&
+               trim(NameCommand)
        case("#TEST")
           call read_var('iRTest'    , iRTest)
           call read_var('iPhiTest'  , iPhiTest)
@@ -129,7 +135,8 @@ contains
     !------------------------------------------------------------------------
     open(UnitTmp_, file=NameFileIn, status='old', iostat=iError)
     if(iError /= 0)then
-       write(*,*) 'Error in ',NameSub,': could not open input file ',NameFileIn
+       write(*,*) 'Error in ',NameSub, &
+            ': could not open input file ',trim(NameFileIn)
        stop
     end if
     do 
@@ -207,7 +214,6 @@ contains
 
     Br_II = Br_II / (nThetaRatio*nPhiRatio)
 
-
     ! remove monopole
     BrAverage = sum(Br_II)/(nTheta*nPhi)
     Br_II = Br_II - BrAverage
@@ -278,9 +284,11 @@ contains
           ThetaNode_I(iTheta) = (iTheta - 1)*dTheta
        end do
     end if
+
     dTheta_I = ThetaNode_I(2:nTheta+1) - ThetaNode_I(1:nTheta)
     SinTheta_I = sin(Theta_I)
     SinThetaNode_I = sin(ThetaNode_I)
+
     if(UseCosTheta)then
        dCosTheta_I = dZ
        dCosThetaNode_I = dZ
@@ -307,8 +315,7 @@ contains
          Potential_C(nR,nTheta,nPhi), &
          Rhs_C(nR,nTheta,nPhi), &
          B0_DF(3,nR+1,nTheta+1,nPhi+1), &
-         DivB_C(nR,nTheta,nPhi), &
-         PlotVar_VC(6,nR,nTheta,nPhi))
+         DivB_C(nR,nTheta,nPhi))
 
     Potential_C       =   0.0
     Rhs_C             =   0.0
@@ -328,7 +335,6 @@ contains
     real    :: Br, Btheta, Bphi
     real    :: rI, rJ, rInv
     real, allocatable :: B_DX(:,:,:,:)
-    integer :: iError
     !-------------------------------------------------------------------------
 
     allocate(B_DX(3,nR+1,nPhi+1,nTheta))
@@ -492,20 +498,16 @@ contains
   subroutine get_gradient(x_C, Grad_DG)
 
     use ModPotentialField, ONLY: nR, nTheta, nPhi, Radius_I, SinTheta_I, &
-         dRadiusNode_I, dTheta_I, dCosTheta_I, dThetaNode_I, dPhiNode_I, &
-         Br_II, set_boundary, &
-         UseCosTheta, RadiusNode_I, Theta_I, SinThetaNode_I, dCosThetaNode_I, &
-         iRTest, iThetaTest, iPhiTest, rMax, ThetaNode_I, Phi_I, PhiNode_I
+         dRadiusNode_I, dThetaNode_I, dPhiNode_I, &
+         set_boundary, &
+         UseCosTheta, SinThetaNode_I, dCosThetaNode_I
 
     real, intent(in):: x_C(nR,nTheta,nPhi)
     real, intent(out):: Grad_DG(3,nR+1,nTheta+1,nPhi+1)
 
     real, allocatable, save :: x_G(:,:,:)
 
-    integer:: iR, iTheta, iPhi, iDim
-
-    real:: r, GradExact_D(3)
-
+    integer:: iR, iTheta, iPhi
     !--------------------------------------------------------------------------
     if(.not.allocated(x_G))then
        allocate(x_G(0:nR+1,0:nTheta+1,0:nPhi+1))
@@ -561,24 +563,6 @@ contains
        end do
     end do
 
-    ! Calculate discretization error for the l=m=1 harmonics
-    !iR = iRTest; iPhi = iPhiTest; iTheta = iThetaTest
-    !
-    !r = Radius_I(iR)
-    !GradExact_D  = (/ &
-    !     (1+2*rMax**3/RadiusNode_I(iR)**3)/(1+2*rMax**3) &
-    !     *sin(Theta_I(iTheta))*cos(Phi_I(iPhi)), &
-    !     (r-rMax**3/r**2)/(1+2*rMax**3)/r &
-    !     *cos(ThetaNode_I(iTheta))*cos(Phi_I(iPhi)), &
-    !     -(r-rMax**3/r**2)/(1+2*rMax**3)/r*sin(PhiNode_I(iPhi)) /)
-    !
-    !write(*,*) 'magnetogram at test cell=', Br_II(iTheta,iPhi)
-    !do iDim = 1, 3
-    !   write(*,*) 'Grad, Exact, Error=', &
-    !        Grad_DG(iDim,iR,iTheta,iPhi), GradExact_D(iDim), &
-    !        Grad_DG(iDim,iR,iTheta,iPhi) - GradExact_D(iDim)
-    !end do
-
   end subroutine get_gradient
 
   !============================================================================
@@ -586,15 +570,13 @@ contains
   subroutine get_divergence(b_DG, DivB_C)
 
     use ModPotentialField, ONLY: nR, nTheta, nPhi, Radius_I, dRadius_I, &
-         dPhi_I, SinTheta_I, dTheta_I, dCosTheta_I, RadiusNode_I, &
-         SinThetaNode_I, Phi_I, &
-         iRTest, iThetaTest, iPhiTest, rMax
+         dPhi_I, SinTheta_I, dCosTheta_I, RadiusNode_I, &
+         SinThetaNode_I
 
     real, intent(in) :: b_DG(3,nR+1,nTheta+1,nPhi+1)
     real, intent(out):: DivB_C(nR,nTheta,nPhi)
 
-    real:: r, DivExact_D(3), Div_D(3)
-    integer:: iR, iTheta, iPhi, iDim
+    integer:: iR, iTheta, iPhi
     !--------------------------------------------------------------------------
     do iPhi = 1, nPhi
        do iTheta = 1, nTheta
@@ -615,62 +597,28 @@ contains
        end do
     end do
 
-    ! Calculate discretization error for the l=m=1 harmonics
-    !iR = iRTest; iPhi = iPhiTest; iTheta = iThetaTest
-    !r = Radius_I(iR)
-    !
-    !Div_D(1) = ( RadiusNode_I(iR+1)**2*b_DG(1,iR+1,iTheta,iPhi)   &
-    !     - RadiusNode_I(iR)**2  *b_DG(1,iR  ,iTheta,iPhi) ) &
-    !     / (Radius_I(iR)**2 *dRadius_I(iR))
-    !
-    !Div_D(2) = ( SinThetaNode_I(iTheta+1)*b_DG(2,iR,iTheta+1,iPhi)   &
-    !     - SinThetaNode_I(iTheta)  *b_DG(2,iR,iTheta  ,iPhi) ) &
-    !     / (Radius_I(iR)*dCosTheta_I(iTheta))
-    !
-    !Div_D(3) = ( b_DG(3,iR,iTheta,iPhi+1) - b_DG(3,iR,iTheta,iPhi) ) &
-    !     / (Radius_I(iR)*SinTheta_I(iTheta)*dPhi_I(iPhi))
-    !
-    !DivExact_D = &
-    !     (/ 2*SinTheta_I(iTheta), &
-    !     (1-SinTheta_I(iTheta)**2)/SinTheta_I(iTheta), &
-    !     - 1/SinTheta_I(iTheta) /)
-    !
-    !DivExact_D = DivExact_D &
-    !     *(r-rMax**3/r**2)/(1+2*rMax**3)/r**2*cos(Phi_I(iPhi))
-    !
-    !do iDim = 1, 3
-    !   write(*,*) 'Div_D, Exact, Error=', Div_D(iDim), DivExact_D(iDim), &
-    !        Div_D(iDim) - DivExact_D(iDim)
-    !end do
-    !   
-    !write(*,*)'testlaplace=', DivB_C(iR,iTheta,iPhi)
-    !write(*,*)'location   =', maxloc(abs(DivB_C))
-    !write(*,*)'max laplace=', maxval(abs(DivB_C))
-    !write(*,*)'avg laplace=', sum(abs(DivB_C))/(nR*nTheta*nPhi)
-    !
-    !stop
-
   end subroutine get_divergence
 
 end module ModB0Matvec
 
 !==============================================================================
 
-program potential_field
+program fdips1
 
   ! Solve 3D potential field with given Br at inner boundary,
   ! radial field at outer boundary.
 
   use ModPotentialField
   use ModB0Matvec, ONLY: get_gradient, get_divergence, matvec
-  use ModLinearSolver, ONLY: bicgstab, prehepta, Lhepta, Uhepta
+  use ModLinearSolver, ONLY: bicgstab, prehepta
   use ModPlotFile, ONLY: save_plot_file
+  use ModMpi
 
   implicit none
 
   integer :: nIter=10000
   real    :: r
-  integer :: n, i, iError, iR, iPhi, iTheta, i_D(3)
+  integer :: n, i, iError, iR, iPhi, iTheta
   !--------------------------------------------------------------------------
 
   call MPI_init(iError)
@@ -770,49 +718,49 @@ program potential_field
   UseBr = .true.
   write(*,*)'nIter, Tolerance, iError=', nIter, Tolerance, iError
 
-  PlotVar_VC = 0.0
-
   ! report maximum divb
   call get_gradient(Potential_C, B0_DF)
   call get_divergence(B0_DF, DivB_C)
   write(*,*) 'max(abs(divb)) = ', maxval(abs(DivB_C))
 
-  PlotVar_VC(1,:,:,:) = Potential_C
-  PlotVar_VC(2,:,:,:) = &
-       0.5*(B0_DF(1,1:nR,1:nTheta,1:nPhi) + B0_DF(1,2:nR+1,1:nTheta,1:nPhi))
-  PlotVar_VC(3,:,:,:) = &
-       0.5*(B0_DF(2,1:nR,1:nTheta,1:nPhi) + B0_DF(2,1:nR,2:nTheta+1,1:nPhi))
-  PlotVar_VC(4,:,:,:) = &
-       0.5*(B0_DF(3,1:nR,1:nTheta,1:nPhi) + B0_DF(3,1:nR,1:nTheta,2:nPhi+1))
-  PlotVar_VC(5,:,:,:) = DivB_C
-  PlotVar_VC(6,:,:,:) = Rhs_C
-
   ! Save divb, potential and RHS for testing purposes
-  if(DoSavePotential) &
-       call save_plot_file(NameFilePotential, TypeFileIn=TypeFilePotential, &
-       StringHeaderIn='potential field', &
-       NameVarIn='r theta phi pot br btheta bphi divb rhs', &
-       Coord1In_I=Radius_I(1:nR), &
-       Coord2In_I=Theta_I(1:nTheta), &
-       Coord3In_I=Phi_I(1:nPhi), &
-       VarIn_VIII=PlotVar_VC)
+  if(DoSavePotential)then
+     allocate(PlotVar_VC(6,nR,nTheta,nPhi))
+     PlotVar_VC = 0.0
 
-  deallocate(PlotVar_VC)
+     PlotVar_VC(1,:,:,:) = Potential_C
+     PlotVar_VC(2,:,:,:) = &
+          0.5*(B0_DF(1,1:nR,1:nTheta,1:nPhi) + B0_DF(1,2:nR+1,1:nTheta,1:nPhi))
+     PlotVar_VC(3,:,:,:) = &
+          0.5*(B0_DF(2,1:nR,1:nTheta,1:nPhi) + B0_DF(2,1:nR,2:nTheta+1,1:nPhi))
+     PlotVar_VC(4,:,:,:) = &
+          0.5*(B0_DF(3,1:nR,1:nTheta,1:nPhi) + B0_DF(3,1:nR,1:nTheta,2:nPhi+1))
+     PlotVar_VC(5,:,:,:) = DivB_C
+     PlotVar_VC(6,:,:,:) = Rhs_C
+
+     call save_plot_file(NameFilePotential, TypeFileIn=TypeFilePotential, &
+          StringHeaderIn='potential field', &
+          NameVarIn='r theta phi pot br btheta bphi divb rhs', &
+          Coord1In_I=Radius_I(1:nR), &
+          Coord2In_I=Theta_I(1:nTheta), &
+          Coord3In_I=Phi_I(1:nPhi), &
+          VarIn_VIII=PlotVar_VC)
+
+     deallocate(PlotVar_VC)
+  end if
 
   call save_potential_field
 
   call MPI_finalize(iError)
 
-end program potential_field
+end program fdips1
 !==============================================================================
 subroutine CON_stop(String)
 
   character(len=*), intent(in):: String
 
-  write(*,*) 'ERROR:', String
+  write(*,*) 'FDIPS1 ERROR:', String
   stop
 
 end subroutine CON_stop
 !==============================================================================
-
-

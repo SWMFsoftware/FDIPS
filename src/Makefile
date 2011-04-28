@@ -1,8 +1,8 @@
 include ../Makefile.def
 include ../Makefile.conf
 
-POTENTIAL: potential_field.o ${LIBDIR}/libSHARE.a
-	${LINK.f90} -o ${BINDIR}/POTENTIAL.exe potential_field.o \
+FDIPS1: FDIPS1.o ${LIBDIR}/libSHARE.a
+	${LINK.f90} -o ${BINDIR}/FDIPS1.exe FDIPS1.o \
 		-L${LIBDIR} -lSHARE ${Lflag1}
 
 FDIPS: FDIPS.o ${LIBDIR}/libSHARE.a
