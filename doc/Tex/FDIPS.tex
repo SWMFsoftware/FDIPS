@@ -1,0 +1,100 @@
+\documentclass[12pt]{article}
+
+\title{FDIPS User Manual \\ \large Code Version 1.00}
+\author{G\'abor T\'oth, Bart van der Holst, Zhenguang Huang}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+
+The Finite Difference Iterative Potential field Solver (FDIPS) can be
+used to obtain a potential field solution from a magnetogram.
+
+\subsection{Quick Start}
+
+\input ../../README
+
+\subsection{Preparing Input File}
+
+The magnetogram files are usually provided in FITS format. We provide
+IDL scripts that can read these files and convert them into a plain
+text files. You need IDL installed. 
+
+First rename the FITSFILE as
+\begin{verbatim}
+  mv original_fits_file fitstile.fits
+\end{verbatim}
+Then start IDL in the same directory and run the {\tt fits\_to\_asci.pro}
+script in the {\tt input} directory:
+\begin{verbatim}
+  IDL> input/fits_to_asci.pro
+\end{verbatim}
+This script will generate 3 files:
+\begin{verbatim}
+   fitsfile.H        -- header information
+   fitsfile_idl.out  -- ASCII file containing longitude, latitude, Br
+   fitsfile.dat      -- ASCII magnetogram file containing array size and Br
+\end{verbatim}
+Only the last file is needed for FDIPS. It can be renamed to any name.
+
+Note that you can create input files by other means too. The format of the
+acii magnetogram file is described at the \#MAGNETOGRAM command.
+
+\subsection{Compiling FDIPS}
+
+To create a serial executable type
+\begin{verbatim}
+  make FDIPS1
+\end{verbatim}
+For larger problems, the parallel code may be preferred. This requires
+a working MPI library and a parallel (or at least multi-core) machine. Type
+\begin{verbatim}
+  make FDIPS
+\end{verbatim}
+in the main directory. The executables will be in the {\tt bin/} directory.
+
+\subsection{Running FDIPS}
+
+Create a run directory with
+\begin{verbatim}
+  make run
+\end{verbatim}
+and move the ASCII magnetogram file into it. Then edit the input parameter
+file {\tt run/FDIPS.in} either with a standard editor, or by running the
+parameter editor Graphical User Interface (GUI) with
+\begin{verbatim}
+  share/Scripts/ParamEditor.pl run/FDIPS.in
+\end{verbatim}
+You can also consult the next section or the PARAM.XML file to see
+how the input parameters should be set.
+
+Once the {\tt FDIPS.in} file is correctly setup, the serial version of FDIPS
+can be run as
+\begin{verbatim}
+  ./FDIPS1.exe
+\end{verbatim}
+while the parallel version as
+\begin{verbatim}
+  mpirun -np 8 FDIPS.exe
+\end{verbatim}
+Note that the number of processors should match the data decomposition defined
+in FDIPS.in (see the description of the \#PARALLEL command)
+
+The serial code will create 1 or 2 complete output files that can be used
+by another code or visualized. The parallel code will produce separate
+files per processor. These need to be combined with the {\tt redistribute.pl}
+script. For example if the domain is decomposed into $4 \times 2$ 
+subdomains
+in the $\theta, \phi$ coordinates, then the field and potential data
+can be collected into complete files using
+\begin{verbatim}
+  ./redistribute.pl fdips_field_np010402_000.out fdips_field.out
+  ./redistribute.pl fdips_pot_np010204_000.out fdips_pot.out
+\end{verbatim}
+
+\input ../../PARAM.xmltex
+
+\end{document}
+
