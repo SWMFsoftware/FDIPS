@@ -29,8 +29,3 @@ ascii			TypeFileField
 potential		TypeOutput
 fdips_potential.out	NameFilePotential
 real8			TypeFilePotential
-
-! This works for serial version only
-OUTPUT
-tecplot			TypeOutput
-potentialfield.dat	NameFileField
