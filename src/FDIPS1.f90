@@ -4,9 +4,6 @@ module ModPotentialField
 
   implicit none
 
-  ! input parameter
-  logical:: DoReadMagnetogram = .true.
-
   ! grid and domain parameters
   integer:: nR = 150, nTheta = 180, nPhi = 360
   real   :: rMin = 1.0, rMax = 2.5
@@ -29,12 +26,6 @@ module ModPotentialField
   character(len=100):: NameFilePotential = 'potentialtest.out'
   character(len=5)  :: TypeFilePotential = 'real8'
   
-  logical           :: DoSaveTecplot   = .false.
-  character(len=100):: NameFileTecplot = 'potentialfield.dat'
-
-  ! testing parameters
-  integer:: iRTest = 1, iPhiTest = 1, iThetaTest = 2
-
   ! local variables --------------------
   logical :: UseBr = .true.
 
@@ -85,10 +76,6 @@ contains
        case("#PARALLEL", "#TIMING")
           write(*,*)'Serial version of FDIPS ignores command ',&
                trim(NameCommand)
-       case("#TEST")
-          call read_var('iRTest'    , iRTest)
-          call read_var('iPhiTest'  , iPhiTest)
-          call read_var('iThetaTest', iThetaTest)
        case("#SOLVER")
           call read_var('UsePreconditioner', UsePreconditioner)
           call read_var('Tolerance',         Tolerance)
@@ -103,9 +90,6 @@ contains
              DoSavePotential = .true.
              call read_var('NameFilePotential', NameFilePotential)
              call read_var('TypeFilePotential', TypeFilePotential)
-          case('tecplot')
-             DoSaveTecplot = .true.
-             call read_var('NameFileTecplot', NameFileTecplot)
           case default
              call CON_stop(NameSub//': unknown TypeOutput='//trim(TypeOutput))
           end select
@@ -123,7 +107,6 @@ contains
     ! Read the raw magnetogram file into a 2d array
 
     integer:: iError
-    integer:: nCarringtonRotation
     integer:: nTheta0, nPhi0, nThetaRatio, nPhiRatio
     integer:: iTheta, iPhi, iTheta0, iTheta1, jPhi0, jPhi1, jPhi, kPhi
     real :: BrAverage, Weight
@@ -141,9 +124,6 @@ contains
     end if
     do 
        read(UnitTmp_,'(a)', iostat = iError ) String
-       if(index(String,'#CR')>0)then
-          read(UnitTmp_,*) nCarringtonRotation
-       endif
        if(index(String,'#ARRAYSIZE')>0)then
           read(UnitTmp_,*) nPhi0
           read(UnitTmp_,*) nTheta0
@@ -151,8 +131,7 @@ contains
        if(index(String,'#START')>0) EXIT
     end do
     
-    write(*,*)'nCarringtonRotation, nTheta0, nPhi0: ',&
-         nCarringtonRotation, nTheta0, nPhi0
+    write(*,*)'nLongitude, nLatitude: ', nPhi0, nTheta0
 
     allocate(Br0_II(nTheta0,nPhi0))
 
@@ -326,13 +305,10 @@ contains
 
   subroutine save_potential_field
 
-    use ModIoUnit,      ONLY: UnitTmp_
     use ModNumConst,    ONLY: cHalfPi
     use ModPlotFile,    ONLY: save_plot_file
 
     integer :: iR, jR, iTheta, iPhi
-    real    :: r, CosTheta, SinTheta, CosPhi, SinPhi
-    real    :: Br, Btheta, Bphi
     real    :: rI, rJ, rInv
     real, allocatable :: B_DX(:,:,:,:)
     !-------------------------------------------------------------------------
@@ -373,8 +349,7 @@ contains
     ! Apply periodicity in Phi to fill the nPhi+1 ghost cell
     B_DX(:,:,nPhi+1,:) = B_DX(:,:,1,:)
 
-    if(DoSaveField) &
-         call save_plot_file(NameFileField, TypeFileIn=TypeFileField, &
+    call save_plot_file(NameFileField, TypeFileIn=TypeFileField, &
          StringHeaderIn = 'Radius [Rs] Longitude [Rad] Latitude [Rad] B [G]', &
          nameVarIn = 'Radius Longitude Latitude Br Bphi Btheta' &
          //' Ro_PFSSM Rs_PFSSM PhiShift nRExt', &
@@ -383,41 +358,6 @@ contains
          Coord1In_I=RadiusNode_I, &
          Coord2In_I=Phi_I(1:nPhi+1), &
          Coord3In_I=cHalfPi-Theta_I(nTheta:1:-1))
-
-    if(DoSaveTecplot)then
-       open(unit = UnitTmp_, file=NameFileTecplot, status='replace')
-
-       write (UnitTmp_, '(a)') 'Title = "'     // 'PFSSM' // '"'
-       write (UnitTmp_, '(a)') &
-         'Variables = ' // trim ('"X [Rs]", "Y [Rs]", "Z [Rs]","Bx [G]",'// &
-	' "By [G]", "Bz [G]"')
-       write(UnitTmp_, '(a)') 'ZONE T="Rectangular zone"'
-       write(UnitTmp_, '(a,i6,a,i6,a,i6,a)') &
-            ' I = ', nR+1, ', J=', nTheta, ', K=', nPhi+1, ', ZONETYPE=Ordered'
-       write(UnitTmp_, '(a)')' DATAPACKING=POINT'
-       write(UnitTmp_, '(a)')' DT=(SINGLE SINGLE SINGLE SINGLE SINGLE SINGLE )'
-
-       do iPhi = 1, nPhi+1; do iTheta = 1, nTheta; do iR = 1, nR+1
-          Br     = B_DX(1,iR,iPhi,nTheta+1-iTheta)
-          Btheta = B_DX(3,iR,iPhi,nTheta+1-iTheta)
-          Bphi   = B_DX(2,iR,iPhi,nTheta+1-iTheta)
-          r = RadiusNode_I(iR)
-          SinTheta = SinTheta_I(iTheta)
-          CosTheta = cos(Theta_I(iTheta))
-          SinPhi   = sin(Phi_I(iPhi))
-          CosPhi   = cos(Phi_I(iPhi))
-
-          write (UnitTmp_,fmt="(6(E14.6))") &
-               r*SinTheta*CosPhi, &
-               r*SinTheta*SinPhi, &
-               r*CosTheta, &
-               Br*SinTheta*CosPhi + Btheta*CosTheta*CosPhi - Bphi*SinPhi, &
-               Br*SinTheta*SinPhi + Btheta*CosTheta*SinPhi + Bphi*CosPhi, &
-               Br*CosTheta        - Btheta*SinTheta
-       end do; end do; end do
-
-       close(UnitTmp_)
-    end if
 
     deallocate(B_DX)
 
@@ -617,7 +557,6 @@ program fdips1
   implicit none
 
   integer :: nIter=10000
-  real    :: r
   integer :: n, i, iError, iR, iPhi, iTheta
   !--------------------------------------------------------------------------
 
@@ -625,33 +564,9 @@ program fdips1
 
   call read_fdips_param
 
-  if(DoReadMagnetogram) call read_magnetogram
+  call read_magnetogram
 
   call init_potential_field
-
-  if(.not.DoReadMagnetogram)then
-     allocate(Br_II(nTheta,nPhi))
-     do iPhi = 1, nPhi; do iTheta = 1, nTheta; 
-        ! magnetogram proportional to the l=m=n harmonics
-        n = 1 ! or 2
-        Br_II(iTheta,iPhi) = sin(Theta_I(iTheta))**n *cos(n*Phi_I(iPhi))
-
-        ! Exact solution
-        do iR = 1, nR
-           r = Radius_I(iR)
-           Potential_C(iR,iTheta,iPhi) = Br_II(iTheta,iPhi) &
-                * (r**n - rMax**(2*n+1)/r**(n+1)) &
-                / (n    + (n+1)*rMax**(2*n+1))
-        end do
-     end do; end do
-
-     write(*,*)'rTest    =',Radius_I(iRTest)
-     write(*,*)'PhiTest  =',Phi_I(iPhiTest)
-     write(*,*)'ThetaTest=',Theta_I(iThetaTest)
-     write(*,*)'BrTest   =',Br_II(iThetaTest,iPhiTest)
-     write(*,*)'PotTest  =',Potential_C(iRTest,iThetaTest,iPhiTest)
-
-  end if
 
   n = nR*nTheta*nPhi
 
@@ -749,7 +664,7 @@ program fdips1
      deallocate(PlotVar_VC)
   end if
 
-  call save_potential_field
+  if(DoSaveField) call save_potential_field
 
   call MPI_finalize(iError)
 
