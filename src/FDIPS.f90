@@ -502,9 +502,8 @@ contains
     call save_plot_file(NameFile, TypeFileIn=TypeFileField, &
          StringHeaderIn = &
          'Radius [Rs] Longitude [Rad] Latitude [Rad] B [G]', &
-         nameVarIn = 'Radius Longitude Latitude Br Bphi Btheta' &
-         //' Ro_PFSSM Rs_PFSSM PhiShift nRExt', &
-         ParamIn_I = (/ rMin, rMax, 0.0, 0.0 /), &
+         NameVarIn = 'Radius Longitude Latitude Br Bphi Btheta Rmin Rmax', &
+         ParamIn_I = (/ rMin, rMax /), &
          nDimIn=3, VarIn_VIII=B_DX, &
          Coord1In_I=RadiusNode_I, &
          Coord2In_I=Phi_I(1:nPhiOut), &
@@ -1023,7 +1022,8 @@ program fdips
      ! Save divb, potential and RHS for testing purposes
      call save_plot_file(NameFile, TypeFileIn=TypeFilePotential, &
           StringHeaderIn='potential field', &
-          NameVarIn='r theta phi pot br btheta bphi divb rhs', &
+          NameVarIn='R Theta Phi Pot Br Btheta Bphi Divb Rhs Rmin Rmax', &
+          ParamIn_I = (/ rMin, rMax /), &
           Coord1In_I=Radius_I(1:nR), &
           Coord2In_I=Theta_I(1:nTheta), &
           Coord3In_I=Phi_I(1:nPhi), &
