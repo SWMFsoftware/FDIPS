@@ -4,7 +4,7 @@
 
 List of commands used in the FDIPS.in file
 
-<commandgroup name="ALL">
+<commandgroup name="ALL COMMANDS">
 
 <command name="MAGNETOGRAM">
 	<parameter name="NameFileIn" type="string" length="100"
