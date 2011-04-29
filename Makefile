@@ -43,6 +43,9 @@ test:
 
 ###############################################################################
 
+run/fdips_ref.out:
+	gunzip -c output/fdips_ref.out.gz > run/fdips_ref.out
+
 test_fdips1:
 	@echo "test_fdips1_compile..." > test_fdips1.diff
 	make FDIPS1
@@ -52,10 +55,13 @@ test_fdips1:
 	@echo "test_fdips1_check..." >> test_fdips1.diff
 	make test_fdips1_check
 
-test_fdips1_check:
+test_fdips1_check: run/fdips_ref.out
 	${SCRIPTDIR}/DiffNum.pl -t -r=1e-5 -a=1e-12 \
 		run/fdips1.log \
 		output/fdips1.ref > test_fdips1.diff
+	${SCRIPTDIR}/DiffNum.pl -t -r=1e-9 -a=1e-9 \
+		run/fdips_field.out \
+		run/fdips_ref.out >> test_fdips1.diff
 	ls -l test_fdips1.diff
 
 ###############################################################################
@@ -66,17 +72,16 @@ test_fdips:
 	@echo "test_fdips_run..." >> test_fdips.diff
 	gunzip -c input/fitsfile.dat.gz > run/fitsfile.dat
 	cd run;	mpirun -np 4 ./FDIPS.exe > fdips.log
-	cd run; ./redistribute.pl fdips_field_np010202.out fdips.out
+	cd run; ./redistribute.pl fdips_field_np010202.out fdips_field.out
 	@echo "test_fdips_check..." >> test_fdips.diff
 	make test_fdips_check
 
-test_fdips_check:
+test_fdips_check: run/fdips_ref.out
 	${SCRIPTDIR}/DiffNum.pl -t -r=1e-5 -a=1e-12 \
 		run/fdips.log \
 		output/fdips.ref > test_fdips.diff
-	gunzip -c output/fdips_ref.out.gz > run/fdips_ref.out
 	${SCRIPTDIR}/DiffNum.pl -t -r=1e-9 -a=1e-9 \
-		run/fdips.out \
+		run/fdips_field.out \
 		run/fdips_ref.out >> test_fdips.diff
 	ls -l test_fdips.diff
 
