@@ -41,7 +41,6 @@ The magnetogram data should start with a header like this:
    0.526234E+00
    ...
 \end{verbatim}
-The nCarringtonRotation is not used by FDIPS, it only serves as metadata.
 The nLongitude and nLatitude define the size of the magnetogram.
 The #START signals the beginning of the magnetogram data itself,
 i.e. the radial magnetic field in arbitrary units. The data is 
@@ -76,8 +75,8 @@ Default values are shown by the example.
 
 #GRID
 150			nR
-180			nTheta
-360			nPhi
+180			nThetaAll
+360			nPhiAll
 
 The three parameters define the number of grid points across the
 whole domain in the R, Theta and Phi directions, respectively. 
@@ -103,10 +102,10 @@ Default values are shown by the example.
 This command only works in parallel FDIPS. The serial version ignores this
 command. The nProcTheta and nProcPhi parameters define the number of 
 subdomains in the Theta and Phi directions, respectively. The total
-number of subdomains must be equal the number of processors nProc, so the 
+number of subdomains must be equal to the number of processors nProc, so the 
 above example can only run on 6 processors. 
 
-The default domain decomposition is nProcTheta = nPro and nProcPhi = 1.
+The default domain decomposition is in the theta direction only, i.e., nProcTheta = nProc and nProcPhi = 1.
 </command>
 
 <command name="TIMING">
