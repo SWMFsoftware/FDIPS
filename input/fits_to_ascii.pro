@@ -62,6 +62,13 @@ printf,lun,strtrim(Nx,2)
 printf,lun,strtrim(Ny,2)
 printf,lun,' '
 printf,lun,'#START'
+for i=0L,Ny-1 do begin
+   for j=0L,Nx-1 do begin
+      ;if(abs(Data(i*Nx+j)) gt 1900.0)then $
+      ;   Data(i*Nx+j)=abs(Data(i*Nx+j))*Data(i*Nx+j)/abs(Data(i*Nx+j)+1e-3)
+      printf,lun, format = '(1e14.6)',Data(i*Nx+j)
+   endfor
+endfor
 
 free_lun, lun
 
