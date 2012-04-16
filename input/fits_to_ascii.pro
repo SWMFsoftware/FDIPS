@@ -24,6 +24,10 @@ CR=0
 ; read,CR,prompt='enter Carrington Rotation number:' 
 ; CR=strtrim(CR,2)
 
+UseCosTheta=''
+
+read,UseCosTheta,prompt='enter T/F for UseCosTheta: '
+
 FileFits  = 'fitsfile.fits'
 FileHeader='fitsfile.H'
 FileDat='fitsfile.dat'
@@ -85,9 +89,20 @@ printf,lun, Nx,' ',Ny
 printf,lun, '0.0'
 printf,lun,'Longitude Latitude Br SomeParameter'
 
+
+dY = 2.0/Ny
+dX = 360.0/Nx
+
 for i=0L,Ny-1 do begin
     for j=0L,Nx-1 do begin
-        printf,lun,format ='(3e14.6)',j,i,Data(j,i)
+       if (UseCosTheta eq 'T' ) then begin
+        printf,lun,format ='(2f10.3, e14.6)', j*dX, $
+                                       acos(1 - (i + 0.5)*dY)*180.0/!pi - 90,$
+                                       Data(j,i)
+     endif else begin
+        printf,lun,format ='(2f10.3, e14.6)', j*dX, (i+0.5)*180.0/Ny - 90, Data(j,i)
+     endelse
+       
     endfor
 endfor
 
