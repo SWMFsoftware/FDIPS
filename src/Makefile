@@ -6,7 +6,7 @@ FDIPS1: FDIPS1.o ${LIBDIR}/libSHARE.a
 		-L${LIBDIR} -lSHARE ${Lflag1}
 
 FDIPS: FDIPS.o ${LIBDIR}/libSHARE.a
-	${LINK.f90} -o ${BINDIR}/FDIPS.exe fdips.o \
+	${LINK.f90} -o ${BINDIR}/FDIPS.exe FDIPS.o \
 		-L${LIBDIR} -lSHARE ${Lflag1}
 
 distclean: clean
