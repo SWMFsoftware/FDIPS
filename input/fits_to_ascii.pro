@@ -1,38 +1,26 @@
-pro fits_to_ascii, FileIn, DataName, silent=silent
+pro fits_to_ascii, silent=silent
 
 ; Purpose:
-;  Read fits file and write header to a file with .H extension
-;  and the data into a ASCII file.
+;  Read FITS format input file
+;    fitsfile.fits 
+; and write three ASCII output files:
+;    fitsfile.dat     - data file used by FDIPS, 
+;    fitsfile.H       - header file with lots of information
+;    fitsfile_idl.out - file for plotting the magnetogram
+;                       with longitude, latitude and radial field.
 ;
 ; Usage:
-;   fits_to_tec [,FileName] [,DataName] [,/silent]
-;
-; DataName is a string which contains the type of data of the image
-; it is used as the data type header of the Tecplot file
-; for example: DataName='Br[G]' or 'U[km/s]'
-; Add /silent to suppress verbose information.
-
-;if n_elements(FileIn) eq 0 then begin 
-;    FileIn = 'fitsfile.fits'
-;endif
-
-nMax=180
-CR=0
-
-; read,nMax,prompt='enter order of harmonics (nMax:)' 
-; nMax=strtrim(nMax,2)
-; read,CR,prompt='enter Carrington Rotation number:' 
-; CR=strtrim(CR,2)
+;   fits_to_ascii [,/silent]
 
 UseCosTheta=''
 
-read,UseCosTheta,prompt='enter T/F for UseCosTheta: '
+read, UseCosTheta, prompt='Is the magnetogram uniform in cos Theta (T/F): '
 
-FileFits  = 'fitsfile.fits'
-FileHeader='fitsfile.H'
-FileDat='fitsfile.dat'
-FileIdl='fitsfile_idl.out' 
-DataName='Br [G]'  
+FileFits     = 'fitsfile.fits'
+FileHeader   = 'fitsfile.H'
+FileDat      = 'fitsfile.dat'
+FileIdl      = 'fitsfile_idl.out' 
+VariableName = 'Br [G]'  
 
 Data = readfits(FileFits, ImHeader, silent=silent)
 
@@ -68,9 +56,7 @@ printf,lun,' '
 printf,lun,'#START'
 for i=0L,Ny-1 do begin
    for j=0L,Nx-1 do begin
-      ;if(abs(Data(i*Nx+j)) gt 1900.0)then $
-      ;   Data(i*Nx+j)=abs(Data(i*Nx+j))*Data(i*Nx+j)/abs(Data(i*Nx+j)+1e-3)
-      printf,lun, format = '(1e14.6)',Data(i*Nx+j)
+      printf,lun, format = '(1e14.6)', Data(j,i)
    endfor
 endfor
 
@@ -83,27 +69,24 @@ if not keyword_set(silent) then begin
 endif
 
 openw,lun,FileIdl,/get_lun
-printf,lun,' Longitude [Deg], Latitude [Deg],',DataName
+printf,lun,' Longitude [Deg], Latitude [Deg],',VariableName
 printf,lun, 0, 0.0,  2, 1, 1
 printf,lun, Nx,' ',Ny
-printf,lun, '0.0'
-printf,lun,'Longitude Latitude Br SomeParameter'
-
+printf,lun, (UseCosTheta eq 'T')
+printf,lun,'Longitude Latitude Br UseCosTheta'
 
 dY = 2.0/Ny
 dX = 360.0/Nx
 
-for i=0L,Ny-1 do begin
-    for j=0L,Nx-1 do begin
-       if (UseCosTheta eq 'T' ) then begin
-        printf,lun,format ='(2f10.3, e14.6)', j*dX, $
-                                       acos(1 - (i + 0.5)*dY)*180.0/!pi - 90,$
-                                       Data(j,i)
-     endif else begin
-        printf,lun,format ='(2f10.3, e14.6)', j*dX, (i+0.5)*180.0/Ny - 90, Data(j,i)
-     endelse
-       
-    endfor
+for i = 0L, Ny-1 do begin
+   if (UseCosTheta eq 'T' ) then $
+      Latitude = acos(1 - (i + 0.5)*dY)*180.0/!pi - 90 $
+   else $
+      Latitude = (i+0.5)*180.0/Ny - 90
+
+   for j = 0L, Nx-1 do begin
+      printf,lun,format ='(2f10.3, e14.6)', j*dX, Latitude, Data(j,i)
+   endfor
 endfor
 
 free_lun,lun
