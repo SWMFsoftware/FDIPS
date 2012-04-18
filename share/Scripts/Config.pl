@@ -10,28 +10,13 @@ my %Compiler = (
 		"AIX"                 => "xlf90",
 		"palm"                => "ifort",
 		"cfe"                 => "ifort",
-		"pfe"                 => "ifort",
+		"pfe"                 => "ifort,gcc",
 		"sysx"                => "xlf90",
 		"nyx-login-intel"     => "pgf90",
 		"nyx-login-amd"       => "pgf90",
 		"hera"                => "mpiifort",
+		"ubgl"                => "mpxlf90,mpxlc",
 		);
-
-# Default MPI library per machine or OS
-my %MpiVersion = (
-		  "Linux"             => "mpich",
-		  "Darwin"            => "mpich",
-		  "OSF1"              => "mpich",
-		  "AIX"               => "IBM",
-		  "IRIX64"            => "SGI",
-		  "palm"              => "Altix",
-		  "cfe"               => "Altix",
-		  "pfe"               => "Altix",
-		  "grendel"           => "openmpi",
-		  "nyx-login-intel"   => "openmpi",
-		  "nyx-login-amd"     => "openmpi",
-		  "hera"              => "mvapich",
-		  );
 
 my $WARNING_='share/Scripts/Config.pl WARNING:';
 my $ERROR_  ='share/Scripts/Config.pl ERROR:';
@@ -59,14 +44,9 @@ our $Compiler;
 $Compiler = $Compiler{$Machine} or $Compiler = $Compiler{$OS} or
     die "$ERROR_ default compiler is not known for OS=$OS\n";
 
-# Default C compiler
-our $CompilerC = "gcc";
+# Default C++ compiler
+our $CompilerC = "gcc_mpicc";
 $CompilerC = $1 if $Compiler =~ s/,(.+)//;
-
-# Obtain the default MPI version for mpif90.h
-our $MpiVersion;
-$MpiVersion = $MpiVersion{$Machine} or $MpiVersion = $MpiVersion{$OS} or
-    die "$ERROR_ default MPI version is not known for OS=$OS\n";
 
 # These are always obtained from the calling script
 our $MakefileDefOrig;       # Original Makefile.def 
@@ -79,8 +59,6 @@ our %Remaining;
 our $MakefileDef      = 'Makefile.def';
 our $MakefileConf     = 'Makefile.conf';
 our $MakefileConfOrig = 'share/build/Makefile';
-our $MpiHeader        = 'share/Library/src/mpif90.h';
-our $MpiHeaderOrig    = 'share/include/mpif90_';
 our $MakefileRules    = 'Makefile.RULES';
 our $MakefileDepend   = 'Makefile.DEPEND';
 
@@ -96,6 +74,17 @@ our $Uninstall;             # True if code is uninstalled
 our $ShowGridSize;          # Show grid size for caller code
 our $NewGridSize;           # New grid size to be set in caller code
 our $Hdf5;                  # True if HDF5 is enabled
+our $Hypre;                 # True if HYPRE lib is enabled
+
+# This string should be added into Makefile.conf when HYPRE is enabled
+my $HypreDefinition = "
+# HYPRE library definitions
+HYPRELIB     = -L\${UTILDIR}/HYPRE/lib -lHYPRE
+HYPRESEARCH  = -I\${UTILDIR}/HYPRE/include
+";             	    
+
+# The name of the parallel HDF5 Fortran compiler
+my $H5pfc = "h5pfc";
 
 # Default precision for installation
 my $DefaultPrecision = 'double';
@@ -107,10 +96,15 @@ my $NewOptimize;
 my $NewDebug;
 my $NewMpi;
 my $NewHdf5;
+my $NewHypre;
 my $IsCompilerSet;
 my $Debug;
 my $Mpi;
+my $CompilerMpi;
+my $MpiHeaderFile = "share/Library/src/mpif.h";
 my $Optimize;
+my $ShowCompiler;
+my $ShowMpi;
 
 # Obtain current settings
 &get_settings_;
@@ -133,16 +127,16 @@ foreach (@Arguments){
     if(/^-compiler=(.*)$/i)   {$Compiler=$1; 
 			       $CompilerC=$1 if $Compiler =~ s/,(.+)//;
 			       $IsCompilerSet=1;  next};
-    if(/^-mpi=(.*)$/i)        {$MpiVersion=$1;                  next};
-    if(/^-standalone$/i)      {$IsComponent=0;                  next};
-    if(/^-component$/i)       {$IsComponent=1;                  next};
-    if(/^-debug$/i)           {$NewDebug="yes";                 next};
-    if(/^-nodebug$/i)         {$NewDebug="no";                  next};
+    if(/^-compiler$/i)        {$ShowCompiler=1;                 next};
     if(/^-mpi$/i)             {$NewMpi="yes";                   next};
     if(/^-nompi$/i)           {$NewMpi="no";                    next};
+    if(/^-debug$/i)           {$NewDebug="yes";                 next};
+    if(/^-nodebug$/i)         {$NewDebug="no";                  next};
     if(/^-hdf5$/i)            {$NewHdf5="yes";                  next};
     if(/^-nohdf5$/i)          {$NewHdf5="no";                   next};
-    if(/^-O[0-4]$/i)          {$NewOptimize=$_;                 next};  
+    if(/^-hypre$/i)           {$NewHypre="yes";                 next};
+    if(/^-nohypre$/i)         {$NewHypre="no";                  next};
+    if(/^-O[0-5]$/i)          {$NewOptimize=$_;                 next};  
     if(/^-g(rid)?$/)          {$ShowGridSize=1;                 next};
     if(/^-g(rid)?=([\d,]+)$/) {$NewGridSize=$+;                 next};
 
@@ -176,6 +170,21 @@ if($Uninstall){
     }
 }
 
+if($ShowCompiler){
+    my @File= glob($MakefileConfOrig.'*');
+    print "List of Fortran compilers for OS=$OS:\n";
+    foreach (@File){
+	next unless s/$MakefileConfOrig\.$OS\.//;
+	print "  $_\n";
+    }
+    print "List of C compilers:\n";
+    foreach (@File){
+        next unless s/$MakefileConfOrig\.(.*(cc|xlc))$/$1/;
+        print "  $_\n";
+    }
+    exit 0;
+}
+
 # Execute the actions in the appropriate order
 &install_code_ if $Install;
 
@@ -198,19 +207,23 @@ if($NewPrecision and $NewPrecision ne $Precision){
 # Change debugging flags if required
 &set_debug_ if $NewDebug and $NewDebug ne $Debug;
 
+# Change optimization level if required
+&set_optimization_ if $NewOptimize and $NewOptimize ne $Optimize;
+
 # Link with MPI vs. NOMPI library if required
 &set_mpi_ if $NewMpi and $NewMpi ne $Mpi;
 
 # Link with HDF5 library is required
 &set_hdf5_ if $NewHdf5 and $NewHdf5 ne $Hdf5;
 
-# Change optimization level if required
-&set_optimization_ if $NewOptimize and $NewOptimize ne $Optimize;
+# Link with HYPRE library is required
+&set_hypre_ if $NewHypre and $NewHypre ne $Hypre;
 
-if($Show){
-    &get_settings_;
-    &show_settings_;
-}
+# Get new settings
+&get_settings_;
+
+# Show settings if required
+&show_settings_ if $Show;
 
 # Recreate Makefile.RULES with the current settings
 &create_makefile_rules;
@@ -245,6 +258,7 @@ sub get_settings_{
     $Debug = "no";
     $Mpi   = "yes";
     $Hdf5  = "no";
+    $Hypre = "no";
   TRY:{
       # Read information from $MakefileConf
       open(MAKEFILE, $MakefileConf)
@@ -256,31 +270,26 @@ sub get_settings_{
 	      close MAKEFILE;
 	      redo TRY;
 	  }
-	  $Compiler = $+ if /^\s*COMPILE.f90\s*=\s*(\$\{CUSTOMPATH_F\})?(\S+)/;
-	  $CompilerC = $1 if/^\s*COMPILE.c\s*=\s*(\S+)/;
+	  $Compiler = $+ if /^\s*COMPILE\.f90\s*=\s*(\$\{CUSTOMPATH_F\})?(\S+)/;
+	  $CompilerC= $1 if /^\s*COMPILE\.c\s*=\s*(\S+)/;
+	  $CompilerMpi = $1 if /^\s*LINK\.f90\s*=\s*(.*)/;
 
 	  $Precision = lc($1) if /^\s*PRECISION\s*=.*(SINGLE|DOUBLE)PREC/;
           $Debug = "yes" if /^\s*DEBUG\s*=\s*\$\{DEBUGFLAG\}/;
 	  $Mpi   = "no"  if /^\s*MPILIB\s*=.*\-lNOMPI/;
-	  $Hdf5  = "yes" if /^\s*HDFLIB\s*=.*\-lHDF5.*/;
-          $Optimize = $1 if /^\s*OPT[0-4]\s*=\s*(-O[0-4])/;
+	  $Hdf5  = "yes" if /^\s*LINK\.f90\s*=.*$H5pfc/;
+	  $Hypre = "yes" if /^\s*HYPRELIB/;
+          $Optimize = $1 if /^\s*OPT[0-5]\s*=\s*(-O[0-5])/;
       }
   }
     close(MAKEFILE);
 
-    open(MPIHEADER, $MpiHeader) or open(MPIHEADER, "../../$MpiHeader") or
-	return;
+    # Fix CompilerMpi definition if needed
+    $CompilerMpi =~ s/\{COMPILE.f90\}\#\s*/\{CUSTOMPATH_MPI\}/;
 
-    my $IsFound = 0;
-    while(<MPIHEADER>){
-	next unless /MPI_HEADER_FILE\s*=.*_(\w+)\.h/;
-	$IsFound = 1;
-	$MpiVersion = $1;
-	last;
-    }
-    close(MPIHEADER);
-    warn "$WARNING_ could not find MPI_HEADER_FILE string in $MpiHeader\n"
-	unless $IsFound;
+    # Remove the commented out name of the original linker when h5pfc is used
+    $CompilerMpi =~ s/$H5pfc \#.*$/$H5pfc/;
+
 }
 
 ##############################################################################
@@ -298,17 +307,21 @@ sub show_settings_{
     if($IsComponent){
 	print "    as the $Component component.\n";
     }else{
-	print "    as a stand-alone code.\n";
+	if(-e $MpiHeaderFile){
+	    print "    as a stand-alone code for serial execution.\n";
+	}else{
+	    print "    as a stand-alone code.\n";
+	}
     }
     print "The installation is for the $OS operating system.\n";
     print "The selected F90 compiler is $Compiler.\n";
-    print "The selected C compiler is   $CompilerC.\n";
-    print "The selected MPI library is  $MpiVersion.\n";
+    print "The selected C++ compiler is $CompilerC.\n";
     print "The default precision for reals is $Precision precision.\n";
     print "The maximum optimization level is $Optimize\n";
-    print "Debugging flags:  $Debug\n";
-    print "Linked with MPI:  $Mpi\n";
-    print "Linked with HDF5: $Hdf5\n";
+    print "Debugging flags:   $Debug\n";
+    print "Linked with MPI:   $Mpi\n";
+    print "Linked with HDF5:  $Hdf5\n";
+    print "Linked with HYPRE: $Hypre\n";
 
     print "\n";
 
@@ -318,7 +331,7 @@ sub show_settings_{
 sub install_code_{
 
     my $Text = $Installed ? "Reinstalling $Code" : "Installing $Code";
-    $Text .= " as a $Component component" if $IsComponent;  
+    $Text .= " as $Component component" if $IsComponent;  
     print "$Text\n";
 
     if($IsComponent){
@@ -365,15 +378,6 @@ sub install_code_{
             &shell_command("cat $Makefile >> $MakefileConf");
 	}else{
 	    die "$ERROR_ could not find $Makefile\n";
-	}
-	
-	my $Header = "$MpiHeaderOrig${OS}_$MpiVersion.h";
-	if(-f $Header){
-	    &shell_command("cat $Header > $MpiHeader");
-	}else{
-	    warn "$WARNING_: $Header was not found,".
-		" using generic ${MpiHeaderOrig}mpich.h\n";
-	    &shell_command("cat ${MpiHeaderOrig}mpich.h > $MpiHeader");
 	}
     }
 
@@ -445,38 +449,102 @@ sub set_debug_{
 
 sub set_mpi_{
 
-    # Select the MPI or NOMPI library in $MakefileConf
+    if(-e $MpiHeaderFile){
+	warn "$WARNING code was installed with -nompi, cannot switch on MPI\n";
+	return;
+    }
 
     # $Mpi will be $NewMpi after changes
     $Mpi = $NewMpi;
+
+    if($Mpi eq "no" and $Install){
+	&shell_command("cp share/include/mpif.h $MpiHeaderFile");
+	$CompilerMpi = '${COMPILE.f90}';
+    }
+
+    # Select the MPI or NOMPI library in $MakefileConf
 
     print "Selecting MPI library in $MakefileConf\n" if $Mpi eq "yes";
     print "Selecting NOMPI library in $MakefileConf\n" if $Mpi eq "no";
     if(not $DryRun){
 	@ARGV = ($MakefileConf);
 	while(<>){
+	    # Modify LINK.f90 definition
+	    if(/^\s*LINK.f90\s*=/){
+		s/\{CUSTOMPATH_MPI\}/\{COMPILE.f90\}\# \t/ if $Mpi eq "no";
+		s/\{COMPILE.f90\}\#\s*/\{CUSTOMPATH_MPI\}/ if $Mpi eq "yes";
+		$_ = 'LINK.f90 = ${COMPILE.f90}'."\n" if $Install;
+	    }
+
 	    # Comment/uncomment MPILIB definitions
 	    if(/MPILIB\s*=/){
 		s/^\s*M/\#M/ if /lNOMPI/ eq ($Mpi eq "yes");
 		s/^\#\s*M/M/ if /lNOMPI/ eq ($Mpi eq "no");
 	    }
-	    # Modify LINK.f90 definition
-	    if(/^\s*LINK.f90\s*=.*mpif90/){
-		s/\{CUSTOMPATH_MPI\}/\{COMPILE.f90\}\# \t/ if $Mpi eq "no";
-		s/\{COMPILE.f90\}\#\s*/\{CUSTOMPATH_MPI\}/ if $Mpi eq "yes";
-	    }
 	    print;
 	}
     }
-    &shell_command("make NOMPI") if $Mpi eq "no";
+
+    if($Mpi eq "no"){
+	# Make sure Makefile.RULES are up to date, then compile NOMPI
+	&create_makefile_rules;
+	&shell_command("make NOMPI") if $Mpi eq "no";
+    }
+
     print "Remove executable and make it to link with the (NO)MPI library!\n";
+}
+
+##############################################################################
+
+sub set_hypre_{
+
+    # Check if library is present
+    if($NewHypre eq "yes" and not -d "util/HYPRE"){
+	print "Warning: util/HYPRE is missing. Use cd util; cvs co HYPRE/\n";
+	return;
+    }
+
+    # $Hypre will be $NewHypre after changes
+    $Hypre = $NewHypre;
+
+    print "Enabling HYPRE library in $MakefileConf\n" if $Hypre eq "yes";
+    print "Disabling HYPRE library in $MakefileConf\n" if $Hypre eq "no";
+    if(not $DryRun){
+	@ARGV = ($MakefileConf);
+	while(<>){
+	    # Add/remove HYPRE related definitions after MPILIB
+	    $_ .= $HypreDefinition if $Hypre eq "yes" and /-lNOMPI/;
+	    chop    if $Hypre eq "no" and /-lNOMPI/;
+	    $_ = "" if $Hypre eq "no" and /HYPRE/i;
+	    print;
+	}
+    }
+    &shell_command("cd util/HYPRE; make install") if $Hypre eq "yes"
+	and not -e "util/HYPRE/lib/libHYPRE.a";
+
+    my @files = glob("src/*Hypre_orig.f90 ??/*/src/*Hypre_orig.f90");
+    foreach my $file (@files){
+	my $outfile = $file;
+	$outfile =~ s/_orig//;
+	my $infile  = $file;
+	$infile =~ s/_orig/_empty/ if $Hypre eq "no";
+	print "set_hypre_: cp $infile $outfile\n";
+	&shell_command("cp $infile $outfile");
+    }
+
 }
 
 ##############################################################################
 
 sub set_hdf5_{
 
-    # $Hdf5 will be $Hdf5 after changes
+    # Check if HDF5 module is loaded
+    if($NewHdf5 eq "yes" and not `which $H5pfc`){
+        print "Warning: $H5pfc is not in path. Load parallel hdf5 module!/\n";
+        return;
+    }
+
+    # $Hdf5 will be $NewHdf5 after changes
     $Hdf5 = $NewHdf5;
 
     print "Enabling HDF5 library in $MakefileConf\n" if $Hdf5 eq "yes";
@@ -484,16 +552,25 @@ sub set_hdf5_{
     if(not $DryRun){
 	@ARGV = ($MakefileConf);
 	while(<>){
-	    # Comment/uncomment MPILIB definitions
-	    if(/HDFLIB\s*=/){
-		s/^\s*H/\#H/ if /lHDF5PLOT/ eq ($Hdf5 eq "no");
-		s/^\#\s*H/H/ if /lHDF5PLOT/ eq ($Hdf5 eq "yes");
-	    }
+	    # Add/remove HDF5 related definitions
+	    s/^(LINK\.f90\s*=\s*\$\{CUSTOMPATH_\w+\})(.*)/$1$H5pfc \#$2/ 
+		if $Hdf5 eq "yes";
+	    s/$H5pfc \#(.*)/$1/
+		if $Hdf5 eq "no";
 	    print;
 	}
     }
-    &shell_command("make HDF5") if $Hdf5 eq "yes";
-    &shell_command("make NOHDF5") if $Hdf5 eq "no";
+
+    my @files = glob("src/*Hdf5_orig.f90 ??/*/src/*Hdf5_orig.f90");
+    foreach my $file (@files){
+	my $outfile = $file;
+	$outfile =~ s/_orig//;
+	my $infile  = $file;
+	$infile =~ s/_orig/_empty/ if $Hdf5 eq "no";
+	print "set_hdf5_: cp $infile $outfile\n";
+	&shell_command("cp $infile $outfile");
+    }
+
 }
 
 ##############################################################################
@@ -508,7 +585,7 @@ sub set_optimization_{
     if(not $DryRun){
 	@ARGV = ($MakefileConf);
 	while(<>){
-	    if (/^\s*OPT([0-4])\s*=\s*/){
+	    if (/^\s*OPT([0-5])\s*=\s*/){
 		if($1 > $Level){
 		    $_ = "OPT$1 = -O$Level\n";
 		}else{
@@ -530,9 +607,10 @@ sub create_makefile_rules{
 
     # Hash for general configuration settings
     my %Settings = (OS         => $OS, 
-		    Compiler   => $Compiler, 
-		    MpiVersion => $MpiVersion, 
+		    Compiler   => $Compiler,
+		    Mpi        => $Mpi,
 		    Debug      => $Debug,
+		    Hdf5       => $Hdf5,
 		    Machine    => $Machine,
 		    Precision  => $Precision);
 
@@ -574,10 +652,14 @@ sub create_makefile_rules{
 	    while($Rule = <INFILE>){
 		last unless $Rule =~ s/^\t//;
 
+		# Find source file name in the rule
 		$Rule =~ /([\w\.]+)\s*$/;
 
 		my $SrcFile = $1;
 		my $ObjectFile = $SrcFile; $ObjectFile =~ s/\.\w+$/.o/;
+
+		# Replace ${LINK.f90} with the $CompilerMpi
+		$Rule =~ s/\$\{LINK.f90\}/$CompilerMpi/;
 
 		print OUTFILE "$ObjectFile: $SrcFile\n\t$Rule\n";
 	    }
@@ -658,59 +740,56 @@ of the SWMF/component script (starting with the text 'Additional ...').
 This script edits the appropriate Makefile-s, copies files and executes 
 shell commands. The script can also show the current settings.
 
-Usage: Config.pl [-help] [-verbose] [-show] [-dryrun] 
-                 [-install[=s|=c] [-compiler=FCOMP[,CCOMP]] [-mpi=VERSION]] 
+Usage: Config.pl [-help] [-verbose] [-dryrun] [-show] [-compiler] 
+                 [-install[=s|=c] [-compiler=FC[,CC] [-nompi]]
                  [-uninstall]
                  [-single|-double] [-debug|-nodebug] [-mpi|-nompi]
-                 [-O0|-O1|-O2|-O3|-O4]
+                 [-hdf5|-nohdf5] [-hypre|-nohypre]
+                 [-O0|-O1|-O2|-O3|-O4|-O5]
 
 If called without arguments, the current settings are shown.
 
 Information:
 
--h  -help      show help message.
--dryrun        dry run (do not modify anything, just show actions).
--show          show current settings.
--verbose       show verbose information.
+-h  -help       show help message.
+-dryrun         dry run (do not modify anything, just show actions).
+-show           show current settings.
+-verbose        show verbose information.
 
 (Un/Re)installation:
 
--uninstall     uninstall code (make distclean)
+-uninstall      uninstall code (make distclean)
 
--install=c     (re)install code as an SWMF component (c)
--install=s     (re)install code as a stand-alone (s) code
--install       install code as a stand-alone if it is not yet installed,
-               or reinstall the same way as it was installed originally:
-               (re)creates Makefile.conf, Makefile.def, make install
+-install=c      (re)install code as an SWMF component (c)
+-install=s      (re)install code as a stand-alone (s) code
+-install        install code as a stand-alone if it is not yet installed,
+                or reinstall the same way as it was installed originally:
+                (re)creates Makefile.conf, Makefile.def, make install
 
--compiler=FCOMP Create Makefile.conf from a non-default F90 compiler FCOMP
-               Only works together with -install flag
-
--compiler=FCOMP,CCOMP 
-               Create Makefile.conf from a non-default F90 compiler FCOMP
-               and non-default C compiler CCOMP.
-               Only works together with -install flag
-
--mpi=VERSION   copy share/include/mpif90_OS_VERSION 
-               into share/Library/src/mpif90.h
-               Only works together with -install flag
+-compiler       show available compiler choices for this operating system (OS)
+-compiler=FC    create Makefile.conf from a non-default F90 compiler FCOMP
+                and the default C compiler
+                only works together with -install flag
+-compiler=FC,CC create Makefile.conf with a non-default F90 compiler FC
+                and non-default C compiler CC.
+                only works together with -install flag
+-nompi          install the code on a machine with no MPI library
+                only works this way with -install flag
 
 Compilation:
 
--single        set precision to single in Makefile.conf and make clean
--double        set precision to double in Makefile.conf and make clean
-
--debug         select debug options for the compiler in Makefile.conf
--nodebug       do not use debug options for the compiler in Makefile.conf
--mpi           compile and link with the MPI library for parallel execution
--nompi         compile and link with the NOMPI library for serial execution
--hdf5          compile and link with HDF5 library for HDF5 plot output
--nohdf5        do not compile with HDF5 library
--O0            set all optimization levels to -O0
--O1            set optimization levels to at most -O1
--O2            set optimization levels to at most -O2
--O3            set optimization levels to at most -O3
--O4            set maximum optimization level
+-single         set precision to single in Makefile.conf and make clean
+-double         set precision to double in Makefile.conf and make clean
+-debug          select debug options for the compiler in Makefile.conf
+-nodebug        do not use debug options for the compiler in Makefile.conf
+-mpi            compile and link with the MPI library for parallel execution
+-nompi          compile and link with the NOMPI library for serial execution
+-O0             set all optimization levels to -O0
+-O1             set optimization levels to at most -O1
+-O2             set optimization levels to at most -O2
+-O3             set optimization levels to at most -O3
+-O4             set optimization levels to at most -O4
+-O5             set optimization levels to at most -O5
 
 Examples of use:
 
@@ -722,13 +801,17 @@ Show current settings with more detail:
 
     Config.pl -show
 
-Install code with the g95 compiler and Intel MPI:
+Show available compiler choices:
 
-    Config.pl -install -compiler=g95,gcc -mpi=Intel
+    Config.pl -compiler
 
-Use the HDF5 plotting library
+Install code with the mpxlf90 Fortran compiler and mpxlc C compiler
 
-    Config.pl -hdf5
+    Config.pl -install -compiler=mpxlf90,mpxlc
+
+Install code with the gfortran compiler and no MPI library on the machine
+
+    Config.pl -install -compiler=gfortran -nompi
 
 Set optimization level to -O0, switch on debugging flags and link with NOMPI:
 

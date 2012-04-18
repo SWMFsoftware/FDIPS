@@ -20,11 +20,21 @@ tar -xzf {path_to_file}/FDIPS_v{version_number}.tgz
 
 Config.pl -install
 
-# On other platforms the Fortan compiler and MPI libraries should be explicitly
-# given. See the share/build and share/include directories for options.
-# Example:
+# On other platforms the Fortan compiler should be explicitly given. Type
 
-Config.pl -install -compiler=ifort -mpi=openmpi
+Config.pl -compiler
+
+# for a list of options. Select the compiler and install the code,
+# for example:
+
+Config.pl -install -compiler=ifort
+
+# If you don't have an MPI library installed, type use the -nompi flag,
+# for example
+
+Config.pl -install -nompi -compiler=gfortran
+
+# Note that only the serial FDIPS1 code can work without MPI. 
 
 ####################
 # Read the manuals #
@@ -38,9 +48,13 @@ doc/FDIPS.pdf
 # Running tests #
 #################
 
-# You can try running the standard test suite by typing
+# Try running the standard test suite by typing
 
 make test
+
+# For serial test only type
+
+make test_fdips1
 
 # Successful passing of the test is indicated by empty *.diff files.
 

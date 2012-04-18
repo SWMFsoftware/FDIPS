@@ -777,7 +777,7 @@ contains
     end if
 
     call set_boundary(x_C, x_G)
-    
+
     ! This initialization is only for the corners
     Grad_DG = 0.0
 

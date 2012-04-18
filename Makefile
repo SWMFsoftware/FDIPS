@@ -35,6 +35,9 @@ FDIPS1: bin run
 	cd ${SHAREDIR}; make LIB
 	cd src; make FDIPS1
 
+NOMPI:
+	cd util/NOMPI/src; make LIB
+
 test:
 	rm -rf run
 	-@make test_fdips1

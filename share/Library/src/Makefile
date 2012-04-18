@@ -21,7 +21,7 @@ MODULES = \
 	${BLAS}\
 	ModBlasLapack.o\
 	ModMpi.o\
-	ModMpiConstants.o\
+	ModMpiOrig.o\
 	ModMpiInterfaces.o\
 	ModReadParam.o\
 	ModPlotFile.o\

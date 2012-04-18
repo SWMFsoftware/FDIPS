@@ -187,7 +187,8 @@ OBJECT:
 	}
     }
     if(not $file){
-	print "$WARNING source file not found, skipping $object !!!\n";
+	print "$WARNING source file not found, skipping $object !!!\n"
+	    unless $object =~ /^(main\.o|advect_main\.o)$/;
 	next OBJECT;
     }
 
@@ -216,7 +217,7 @@ OBJECT:
 		unless $use{$base}=~/ $module\b/i;
 	}
 	# Check for 'include "filename"'
-	if(/^\s*include\s+[\"\']([^\'\"]+)/i){
+	if(/^\s*include\s+[\"\']([^\'\"]+)/i and not /\bmpif.h\b/){
 	    my $include=$1;
 	    my $includeorig=$include;
 	    # If include file is not found check the search path
@@ -252,7 +253,7 @@ foreach $base (@base){
 
         # Exclude dependency on itself and compiler provided modules
         map { $_='' if $_ eq "$base.o" or /F90_UNIX_IO/i or /ESMF_Mod.o/i
-	      or /netcdf.o/i or /ezspline/i or /ezcdf.o/i}
+	      or /netcdf.o/i or /ezspline/i or /ezcdf.o/i or /hdf5.o/i}
 	(@use);
 	    
         # Make string out of array
