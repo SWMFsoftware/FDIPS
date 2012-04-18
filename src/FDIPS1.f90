@@ -582,15 +582,22 @@ program fdips1
         f_I(i)  = RadiusNode_I(iR+1)**2 &
              /(Radius_I(iR)**2 * dRadiusNode_I(iR+1) * dRadius_I(iR))
 
-        e1_I(i) = SinThetaNode_I(iTheta)**2 / &
-             (Radius_I(iR)**2 * dCosThetaNode_I(iTheta)  *dCosTheta_I(iTheta))
+        if(UseCosTheta) then
+           e1_I(i) = SinThetaNode_I(iTheta)**2 / &
+                (Radius_I(iR)**2 * dCosThetaNode_I(iTheta)  *dCosTheta_I(iTheta))
 
         !e1_I(i) = 0.0
 
-        f1_I(i) = SinThetaNode_I(iTheta+1)**2 /&
-             (Radius_I(iR)**2 * dCosThetaNode_I(iTheta+1)*dCosTheta_I(iTheta))
+           f1_I(i) = SinThetaNode_I(iTheta+1)**2 /&
+                (Radius_I(iR)**2 * dCosThetaNode_I(iTheta+1)*dCosTheta_I(iTheta))
 
-        !f1_I(i) = 0.0
+           !f1_I(i) = 0.0 
+        else
+           e1_I(i) = SinThetaNode_I(iTheta) / &
+                (Radius_I(iR)**2 * dThetaNode_I(iTheta)  *dCosTheta_I(iTheta))
+           f1_I(i) = SinThetaNode_I(iTheta+1) /&
+                (Radius_I(iR)**2 * dThetaNode_I(iTheta+1)*dCosTheta_I(iTheta))
+        end if
 
         e2_I(i) = 1/(Radius_I(iR)**2 * SinTheta_I(iTheta)**2 &
              * dPhiNode_I(iPhi) * dPhi_I(iPhi))
