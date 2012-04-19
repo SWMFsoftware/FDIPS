@@ -565,95 +565,102 @@ contains
     ! The potential is zero at the outer boundary
     x_G(nR+1,:,:) = -x_G(nR,:,:)
 
-    ! Set tmpXPhi0_II and tmpXPhipi_II which used to store the global 
-    ! boundary close to the pole to the root
-    if (iProcTheta ==0) then
-       sendBC010_II = x_G(:,1,1:nPhi)
-       call MPI_ISEND(sendBC010_II, (nR+2)*nPhi,MPI_REAL, 0, 010, &
-                      iComm, SendRequest010, iError)
-    end if
-    if (iProcTheta == nProcTheta-1) then
-       sendBC180_II = x_G(:,nTheta,1:nPhi)
-       call MPI_ISEND(sendBC180_II, (nR+2)*nPhi,MPI_REAL, 0, 180, &
-                      iComm, SendRequest180, iError)
-    end if
+    ! Using the uniform in cos(theta) grid does not require message
+    ! passing around the pole.
+    if(.not.UseCosTheta) then
 
-    ! The root update tmpXPhi0_II/tmpXPhipi_II from all processors
-    if (iProc == 0) then
-       do jProc=0, nProcPhi-1
-          if (jProc < nProcPhiLgr) then
-             shift = jProc * nPhiLgr
-             
-             call MPI_IRECV(recvBCLgr010_II, (nR+2)*nPhiLgr, MPI_REAL, &
-                            jProc, &
-                            010, iComm, RecvRequest010, iError)
-             call mpi_wait(RecvRequest010, status, iError)
-             tmpXPhi0_II(:, shift + 1: shift + nPhiLgr) = recvBCLgr010_II
-                
-             call MPI_IRECV(recvBCLgr180_II, (nR+2)*nPhiLgr, MPI_REAL, &
-                            (nProcTheta-1)*nProcPhi+jProc, &
-                            180, iComm, RecvRequest180, iError)
-             call mpi_wait(RecvRequest180, status, iError)
-             tmpXPhipi_II(:, shift + 1: shift + nPhiLgr) = recvBCLgr180_II
-          else
-             shift = nProcPhiLgr*nPhiLgr + (jProc - nProcPhiLgr)*nPhiSml
+       ! Set tmpXPhi0_II and tmpXPhipi_II which used to store the global 
+       ! boundary close to the pole to the root
+       if (iProcTheta ==0) then
+          sendBC010_II = x_G(:,1,1:nPhi)
+          call MPI_ISEND(sendBC010_II, (nR+2)*nPhi,MPI_REAL, 0, 010, &
+               iComm, SendRequest010, iError)
+       end if
+       if (iProcTheta == nProcTheta-1) then
+          sendBC180_II = x_G(:,nTheta,1:nPhi)
+          call MPI_ISEND(sendBC180_II, (nR+2)*nPhi,MPI_REAL, 0, 180, &
+               iComm, SendRequest180, iError)
+       end if
 
-             call MPI_IRECV(recvBCSml010_II, (nR+2)*nPhiSml,  MPI_REAL, &
-                            jProc, &
-                            010, iComm, RecvRequest010, iError)
-             call mpi_wait(RecvRequest010, status, iError)
-             tmpXPhi0_II(:, shift + 1: shift + nPhiSml) = recvBCSml010_II
+       ! The root update tmpXPhi0_II/tmpXPhipi_II from all processors
+       if (iProc == 0) then
+          do jProc=0, nProcPhi-1
+             if (jProc < nProcPhiLgr) then
+                shift = jProc * nPhiLgr
 
-             call MPI_IRECV(recvBCSml180_II , (nR+2)*nPhiSml,  MPI_REAL, &
-                            (nProcTheta-1)*nProcPhi+jProc, &
-                            180, iComm, RecvRequest180, iError)
-             call mpi_wait(RecvRequest180, status, iError)
-             tmpXPhipi_II(:, shift + 1: shift + nPhiSml) = recvBCSml180_II
-          end if
-       end do
-    end if
+                call MPI_IRECV(recvBCLgr010_II, (nR+2)*nPhiLgr, MPI_REAL, &
+                     jProc, &
+                     010, iComm, RecvRequest010, iError)
+                call mpi_wait(RecvRequest010, status, iError)
+                tmpXPhi0_II(:, shift + 1: shift + nPhiLgr) = recvBCLgr010_II
 
-    call  MPI_bcast(tmpXPhi0_II,  (nR+2)*nPhiAll, MPI_REAL, 0,  iComm, iError)
-    call  MPI_bcast(tmpXPhipi_II, (nR+2)*nPhiAll, MPI_REAL, 0,  iComm, iError)
+                call MPI_IRECV(recvBCLgr180_II, (nR+2)*nPhiLgr, MPI_REAL, &
+                     (nProcTheta-1)*nProcPhi+jProc, &
+                     180, iComm, RecvRequest180, iError)
+                call mpi_wait(RecvRequest180, status, iError)
+                tmpXPhipi_II(:, shift + 1: shift + nPhiLgr) = recvBCLgr180_II
+             else
+                shift = nProcPhiLgr*nPhiLgr + (jProc - nProcPhiLgr)*nPhiSml
 
-    ! Symmetric in Theta but shifted by nPhiAll/2, be careful about the shift!
-    if (iProcTheta == 0) then
-       do iPhi = 1, nPhi
-          jPhi = modulo(iPhi + iPhi0 -1 + nPhiAll/2, nPhiAll) + 1
-          x_G(:,0,iPhi)        = tmpXPhi0_II(:,jPhi)
-       end do
-    end if
-    if (iProcTheta == nProcTheta-1) then
-       do iPhi = 1, nPhi
-          jPhi = modulo(iPhi + iPhi0 -1 + nPhiAll/2, nPhiAll) + 1
-          x_G(:,nTheta+1,iPhi) = tmpXPhipi_II(:,jPhi)
-       end do
+                call MPI_IRECV(recvBCSml010_II, (nR+2)*nPhiSml,  MPI_REAL, &
+                     jProc, &
+                     010, iComm, RecvRequest010, iError)
+                call mpi_wait(RecvRequest010, status, iError)
+                tmpXPhi0_II(:, shift + 1: shift + nPhiSml) = recvBCSml010_II
+
+                call MPI_IRECV(recvBCSml180_II , (nR+2)*nPhiSml,  MPI_REAL, &
+                     (nProcTheta-1)*nProcPhi+jProc, &
+                     180, iComm, RecvRequest180, iError)
+                call mpi_wait(RecvRequest180, status, iError)
+                tmpXPhipi_II(:, shift + 1: shift + nPhiSml) = recvBCSml180_II
+             end if
+          end do
+       end if
+
+       call  MPI_bcast(tmpXPhi0_II,  (nR+2)*nPhiAll, MPI_REAL,0,iComm,iError)
+       call  MPI_bcast(tmpXPhipi_II, (nR+2)*nPhiAll, MPI_REAL,0,iComm,iError)
+
+       ! Symmetric in Theta but shifted by nPhiAll/2, 
+       ! be careful about the shift!
+       if (iProcTheta == 0) then
+          do iPhi = 1, nPhi
+             jPhi = modulo(iPhi + iPhi0 -1 + nPhiAll/2, nPhiAll) + 1
+             x_G(:,0,iPhi)        = tmpXPhi0_II(:,jPhi)
+          end do
+       end if
+       if (iProcTheta == nProcTheta-1) then
+          do iPhi = 1, nPhi
+             jPhi = modulo(iPhi + iPhi0 -1 + nPhiAll/2, nPhiAll) + 1
+             x_G(:,nTheta+1,iPhi) = tmpXPhipi_II(:,jPhi)
+          end do
+       end if
+
     end if
 
     !Update the local theta boundary
     if (iProcTheta /= nProcTheta-1) then
        sendBC34_II = x_G(:,nTheta,1:nPhi)
        call MPI_ISEND(sendBC34_II, (nR+2)*nPhi, MPI_REAL, &
-                     (iProcTheta+1)*nProcPhi+iProcPhi, &
-                     34, iComm, SendRequest34,  iError)
+            (iProcTheta+1)*nProcPhi+iProcPhi, &
+            34, iComm, SendRequest34,  iError)
     end if
     if (iProcTheta /= 0) then
        sendBC43_II = x_G(:,1,1:nPhi)
        call MPI_ISEND(sendBC43_II, (nR+2)*nPhi, MPI_REAL, &
-                     (iProcTheta-1)*nProcPhi+iProcPhi, &
-                     43, iComm,  SendRequest43,  iError)
+            (iProcTheta-1)*nProcPhi+iProcPhi, &
+            43, iComm,  SendRequest43,  iError)
     end if
     if (iProcTheta /= nProcTheta-1) then
        call MPI_IRECV(recvBC43_II, (nR+2)*nPhi, MPI_REAL, &
-                     (iProcTheta+1)*nProcPhi+iProcPhi, &
-                     43, iComm,  RecvRequest43, iError)
+            (iProcTheta+1)*nProcPhi+iProcPhi, &
+            43, iComm,  RecvRequest43, iError)
        call mpi_wait(RecvRequest43, status, iError)
        x_G(:,nTheta+1,1:nPhi) = recvBC43_II
     end if
     if (iProcTheta /= 0) then
        call MPI_IRECV(recvBC34_II, (nR+2)*nPhi, MPI_REAL, &
-                     (iProcTheta-1)*nProcPhi+iProcPhi, &
-                     34, iComm,  RecvRequest34, iError)
+            (iProcTheta-1)*nProcPhi+iProcPhi, &
+            34, iComm,  RecvRequest34, iError)
        call mpi_wait(RecvRequest34, status, iError)
        x_G(:,0,1:nPhi) = recvBC34_II
     end if
@@ -663,28 +670,28 @@ contains
     if (iProcPhi == 0) then
        sendBC020_II = x_G(:,:,1)
        call MPI_ISEND(sendBC020_II, (nR+2)*(nTheta+2), MPI_REAL, &
-                      iProcTheta*nProcPhi + nProcPhi-1, &
-                      020, iComm, SendRequest020, iError)
+            iProcTheta*nProcPhi + nProcPhi-1, &
+            020, iComm, SendRequest020, iError)
     end if
     if (iProcPhi == nProcPhi-1) then
        sendBC360_II = x_G(:,:,nPhi)
        call MPI_ISEND(sendBC360_II, (nR+2)*(nTheta+2), MPI_REAL, &
-                      iProcTheta*nProcPhi ,  &
-                      360, iComm, SendRequest360, iError)
+            iProcTheta*nProcPhi ,  &
+            360, iComm, SendRequest360, iError)
     end if
 
     ! Update boundary info
     if (iProcPhi == 0) then
        call MPI_IRECV(recvBC360_II, (nR+2)*(nTheta+2), MPI_REAL, &
-                      iProcTheta*nProcPhi + nProcPhi-1, &
-                      360, iComm, RecvRequest360, iError)
+            iProcTheta*nProcPhi + nProcPhi-1, &
+            360, iComm, RecvRequest360, iError)
        call mpi_wait(RecvRequest360, status, iError)
        x_G(:,:,0) = recvBC360_II
     end if
     if (iProcPhi == nProcPhi-1) then
        call MPI_IRECV(recvBC020_II, (nR+2)*(nTheta+2), MPI_REAL, &
-                      iProcTheta*nProcPhi , &
-                      020, iComm, RecvRequest020, iError)
+            iProcTheta*nProcPhi , &
+            020, iComm, RecvRequest020, iError)
        call mpi_wait(RecvRequest020, status, iError)
        x_G(:,:,nPhi+1) = recvBC020_II
     end if
@@ -693,26 +700,26 @@ contains
     if (iProcPhi /= nProcPhi-1) then
        sendBC12_II = x_G(:,:,nPhi)
        call MPI_ISEND(sendBC12_II, (nR+2)*(nTheta+2), MPI_REAL, &
-                      iProcTheta*nProcPhi + iProcPhi+1, &
-                      12,  iComm, SendRequest12, iError)
+            iProcTheta*nProcPhi + iProcPhi+1, &
+            12,  iComm, SendRequest12, iError)
     end if
     if (iProcPhi /= 0) then
        sendBC21_II = x_G(:,:,1)
        call MPI_ISEND(sendBC21_II, (nR+2)*(nTheta+2), MPI_REAL, &
-                      iProcTheta*nProcPhi + iProcPhi-1, &
-                      21,  iComm, SendRequest21, iError)
+            iProcTheta*nProcPhi + iProcPhi-1, &
+            21,  iComm, SendRequest21, iError)
     end if
     if (iProcPhi /= nProcPhi-1) then
        call MPI_IRECV(recvBC21_II, (nR+2)*(nTheta+2), MPI_REAL, &
-                      iProcTheta*nProcPhi + iProcPhi+1, &
-                      21,  iComm, RecvRequest21, iError)
+            iProcTheta*nProcPhi + iProcPhi+1, &
+            21,  iComm, RecvRequest21, iError)
        call mpi_wait(RecvRequest21, status, iError)
        x_G(:,:,nPhi+1) = recvBC21_II
     end if
     if (iProcPhi /= 0) then
        call MPI_IRECV(recvBC12_II, (nR+2)*(nTheta+2), MPI_REAL, &
-                      iProcTheta*nProcPhi + iProcPhi-1, &
-                      12,  iComm, RecvRequest12, iError)
+            iProcTheta*nProcPhi + iProcPhi-1, &
+            12,  iComm, RecvRequest12, iError)
        call mpi_wait(RecvRequest12, status, iError)
        x_G(:,:,0) = recvBC12_II
     end if
