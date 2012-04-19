@@ -24,13 +24,14 @@ Config.pl -install
 
 Config.pl -compiler
 
-# for a list of options. Select the compiler and install the code,
-# for example:
+# for a list of options. Note that "f95" refers to the NAG Fortran compiler,
+# and "gfortran" to the GNU Fortran compiler.
+# Select the appropriate compiler and install the code, for example:
 
 Config.pl -install -compiler=ifort
 
-# If you don't have an MPI library installed, type use the -nompi flag,
-# for example
+# If you do not have an MPI library installed, use the -nompi flag
+# for installation, for example
 
 Config.pl -install -nompi -compiler=gfortran
 
