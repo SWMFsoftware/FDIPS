@@ -1,6 +1,6 @@
 \documentclass[12pt]{article}
 
-\title{FDIPS User Manual \\ \large Code Version 1.00}
+\title{FDIPS User Manual \\ \large Code Version 1.20}
 \author{G\'abor T\'oth, Bart van der Holst, Zhenguang Huang}
 
 \begin{document}
@@ -24,14 +24,16 @@ text files. You need IDL installed.
 
 First rename the FITSFILE as
 \begin{verbatim}
-  mv original_fits_file fitstile.fits
+  mv original_fits_file fitsfile.fits
 \end{verbatim}
 Then start IDL in the same directory and run the {\tt fits\_to\_ascii.pro}
 script in the {\tt input} directory:
 \begin{verbatim}
   IDL> input/fits_to_ascii.pro
 \end{verbatim}
-This script will generate 3 files:
+The script will prompt you to tell if the magnetogram grid is uniform 
+in latitude or the cosine of the latitude (this only matters for the
+{\tt fitsfile\_idl.out} file). The script will generate 3 files:
 \begin{verbatim}
    fitsfile.H        -- header information
    fitsfile_idl.out  -- ASCII file containing longitude, latitude, Br
