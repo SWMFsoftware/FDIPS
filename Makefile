@@ -91,6 +91,7 @@ test_fdips_check: run/fdips_ref.out
 clean:
 	cd doc/Tex; make clean
 	cd share; make clean
+	cd util;  make clean
 	cd src; make clean
 
 allclean:
